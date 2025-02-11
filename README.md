@@ -1,4 +1,4 @@
-# Project Title: Modeling Dollar Cost Averaging for Bitcoin Investments
+# Project Title: Dollar Cost Averaging Model for Bitcoin Investments
 
 ## Project Background
 Dollar Cost Averaging (DCA) is an investment strategy where an investor divides up the total amount to be invested across periodic purchases of a target asset to reduce the impact of volatility on the overall purchase. The goal of this project was to demonstrate how DCA could be applied to Bitcoin investments by using historical price data. This approach would allow individuals to understand the potential benefits and returns of systematically investing in Bitcoin, similar to how one might contribute to a 401(k) or retirement fund.
