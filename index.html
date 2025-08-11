@@ -246,6 +246,19 @@
             background-color: #f2f2f2;
         }
 
+        .table-wrapper {
+            overflow-x: auto;
+            white-space: nowrap;
+            max-width: 100%;
+            margin-top: 20px;
+        }
+
+        #historyTable {
+            display: inline-block;
+            min-width: 100%;
+            border-collapse: collapse;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 10px;
@@ -290,6 +303,10 @@
             h3 {
                 font-size: 16px;
             }
+
+            .table-wrapper {
+                -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+            }
         }
     </style>
 </head>
@@ -324,21 +341,23 @@
         <div id="error"></div>
         <div id="results"></div>
         <canvas id="dcaChart" style="display: none;"></canvas>
-        <table id="historyTable" style="display: none;">
-            <thead>
-                <tr>
-                    <th>Buy #</th>
-                    <th>Date</th>
-                    <th>Total Invested ($)</th>
-                    <th>Price ($)</th>
-                    <th>Portfolio Value ($)</th>
-                    <th>Profit ($)</th>
-                    <th>BTC Bought</th>
-                    <th>Total Bitcoin</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table id="historyTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Buy #</th>
+                        <th>Date</th>
+                        <th>Total Invested ($)</th>
+                        <th>Price ($)</th>
+                        <th>Portfolio Value ($)</th>
+                        <th>Profit ($)</th>
+                        <th>BTC Bought</th>
+                        <th>Total Bitcoin</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
         
         <footer class="footer">
             <p><a href="https://observation-deck.netlify.app/">Observation Deck</a> | JS | <a href="https://github.com/00xJS/dca-analysis">Project GitHub</a></p>
@@ -365,13 +384,16 @@
             return duration || '0 months';
         }
 
-        async function fetchWithRetry(url, retries = 3, delay = 1000) {
+        async function fetchWithRetry(url, retries = 3, delay = 1000, timeout = 10000) {
             for (let i = 0; i < retries; i++) {
                 try {
-                    const response = await fetch(url);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    const response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
                     if (response.ok) return response;
                     const errorText = await response.text();
-                    throw new Error(`CoinGecko fetch failed: ${response.status} - ${errorText}`);
+                    throw new Error(`Fetch failed: ${response.status} - ${errorText}`);
                 } catch (error) {
                     if (i === retries - 1) throw error;
                     console.warn(`Retry ${i + 1}/${retries} after ${delay}ms: ${error.message}`);
@@ -400,31 +422,22 @@
             }
 
             try {
-                // Fetch and aggregate CSV data
+                // Fetch and process daily CSV data
                 let prices = [];
                 try {
-                    const csvResponse = await fetch('data/btcusd_1-min_data.csv');
-                    if (!csvResponse.ok) {
-                        throw new Error(`Failed to load CSV: ${csvResponse.status} - ${csvResponse.statusText}`);
-                    }
+                    const csvResponse = await fetchWithRetry('data/bitcoin_daily.csv');
                     const csvText = await csvResponse.text();
                     const csvData = Papa.parse(csvText, { header: true, skipEmptyLines: true });
                     if (csvData.errors.length > 0) {
                         throw new Error('Error parsing CSV: ' + csvData.errors[0].message);
                     }
 
-                    const csvPrices = {};
-                    csvData.data.forEach(row => {
-                        const timestamp = parseInt(row.Timestamp);
-                        if (isNaN(timestamp)) return;
-                        const date = new Date(timestamp * 1000);
-                        const dateKey = date.toISOString().split('T')[0];
+                    prices = csvData.data.map(row => {
+                        const timestamp = new Date(row.Timestamp);
                         const price = parseFloat(row.Close);
-                        if (!isNaN(price) && price > 0) {
-                            csvPrices[dateKey] = { ts: Math.floor(date.getTime() / 1000), price };
-                        }
-                    });
-                    prices = Object.values(csvPrices);
+                        if (isNaN(price) || price <= 0 || isNaN(timestamp.getTime())) return null;
+                        return { ts: Math.floor(timestamp.getTime() / 1000), price };
+                    }).filter(p => p !== null);
                 } catch (csvError) {
                     throw new Error(`CSV processing error: ${csvError.message}`);
                 }
