@@ -349,7 +349,7 @@
                         <th>Date</th>
                         <th>Total Invested ($)</th>
                         <th>Price ($)</th>
-                        <th>Portfolio Value ($)</th>
+                        <th>Total Portfolio ($)</th>
                         <th>Profit ($)</th>
                         <th>BTC Bought</th>
                         <th>Total Bitcoin</th>
@@ -532,6 +532,9 @@
                     p.finalProfit = (p.finalPortfolioValue - p.totalInvested).toFixed(2);
                 });
 
+                // Helper function for comma formatting
+                const formatNumber = (num) => Number(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
                 // Display results in a two-column table
                 resultsDiv.innerHTML = `
                     <table>
@@ -552,15 +555,15 @@
                             </tr>
                             <tr>
                                 <td>Total Invested</td>
-                                <td>$${totalInvested.toFixed(2)}</td>
+                                <td>$${formatNumber(totalInvested)}</td>
                             </tr>
                             <tr>
                                 <td>Total Portfolio</td>
-                                <td>$${finalValue.toFixed(2)}</td>
+                                <td>$${formatNumber(finalValue)}</td>
                             </tr>
                             <tr>
                                 <td>Total Profit</td>
-                                <td>$${profit}</td>
+                                <td>$${formatNumber(profit)}</td>
                             </tr>
                             <tr>
                                 <td>Total BTC Bought</td>
@@ -604,10 +607,10 @@
                     row.innerHTML = `
                         <td>${p.buyNumber}</td>
                         <td>${p.date}</td>
-                        <td>${p.totalInvested}</td>
-                        <td>${p.price}</td>
-                        <td>${p.portfolioValue}</td>
-                        <td>${p.profit}</td>
+                        <td>$${formatNumber(p.totalInvested)}</td>
+                        <td>$${formatNumber(p.price)}</td>
+                        <td>$${formatNumber(p.portfolioValue)}</td>
+                        <td>$${formatNumber(p.profit)}</td>
                         <td>${p.btcBought}</td>
                         <td>${p.totalBtc.toFixed(8)}</td>
                     `;
