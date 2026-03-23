@@ -46,7 +46,13 @@ def fetch_ohlc(since: int, attempt: int = 0) -> tuple[list, int]:
         if data.get("error"):
             raise RuntimeError(f"Kraken API error: {data['error']}")
 
-        candles = data["result"].get(PAIR, [])
+        # Kraken quirk: request uses "XBTUSD" but the response key is
+        # "XXBTZUSD" (their internal XX-prefix for crypto, Z-prefix for fiat).
+        # Dynamically grab the first result key that isn't "last".
+        pair_keys = [k for k in data["result"] if k != "last"]
+        if not pair_keys:
+            return [], since
+        candles = data["result"][pair_keys[0]]
         last_ts = int(data["result"].get("last", since))
         return candles, last_ts
 
