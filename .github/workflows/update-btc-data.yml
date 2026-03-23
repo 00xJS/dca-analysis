@@ -41,5 +41,6 @@ jobs:
             echo "Price data is already up to date — nothing to commit."
           else
             git commit -m "chore: update BTC price data [$(date -u +%Y-%m-%d)]"
+            git pull --rebase
             git push
           fi
