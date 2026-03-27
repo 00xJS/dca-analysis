@@ -306,7 +306,6 @@
 
     <!-- Live status bar: shows current BTC price + cache age -->
     <div id="dataStatus" class="data-status loading">
-        <span class="spin"></span>
         <span id="statusText">Loading Bitcoin price data&hellip;</span>
     </div>
 
@@ -460,7 +459,7 @@ function setStatus(state, html) {
     // state: 'loading' | 'ok' | 'stale' | 'error'
     dataStatusEl.className = `data-status ${state}`;
     const icon = {
-        loading: '<span class="spin"></span>',
+        loading: '',
         ok:      '&#10003;',   // ✓
         stale:   '&#9888;',    // ⚠
         error:   '&#10007;',   // ✗
