@@ -1,11 +1,9 @@
 name: Update BTC Price Data
 
-# Runs daily at 08:00 UTC and can be triggered manually from the
-# GitHub Actions tab (useful for the very first run).
 on:
   schedule:
-    - cron: '0 8 * * *'
-  workflow_dispatch:
+    - cron: '0 8 * * *'   # daily at 08:00 UTC
+  workflow_dispatch:        # allow manual trigger from the Actions tab
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # silence Node.js 20 deprecation warning
@@ -14,11 +12,8 @@ jobs:
   update-prices:
     runs-on: ubuntu-latest
 
-    # Grant the built-in GITHUB_TOKEN write access so the job can
-    # commit data/btc-prices.json back to the repo. No external
-    # secrets or API keys are needed — Kraken's API is fully public.
     permissions:
-      contents: write
+      contents: write        # needed to commit and push btc-prices.json
 
     steps:
       - name: Checkout repository
@@ -29,18 +24,22 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Fetch BTC price data from Kraken
+      - name: Install Kaggle CLI
+        run: pip install kaggle --quiet
+
+      - name: Fetch BTC prices (Kaggle + Kraken gap fill)
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: python scripts/fetch_btc_prices.py
 
       - name: Commit and push if data changed
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/btc-prices.json
-          if git diff --cached --quiet; then
-            echo "Price data is already up to date — nothing to commit."
-          else
-            git commit -m "chore: update BTC price data [$(date -u +%Y-%m-%d)]"
-            git pull --rebase
+          git diff --cached --quiet && echo "No new data — nothing to commit." || (
+            git commit -m "chore: update BTC price data $(date -u +%Y-%m-%d) [skip ci]" &&
+            git pull --rebase &&
             git push
-          fi
+          )
