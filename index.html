@@ -373,8 +373,8 @@
             <a href="https://github.com/00xJS/dca-analysis">GitHub</a>
         </p>
         <p>
-            Price data: <a href="https://www.kraken.com" target="_blank" rel="noopener">Kraken API</a>
-            (daily closes &bull; updated daily via GitHub Actions &bull; no API key required)
+            Price data: <a href="https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data" target="_blank" rel="noopener">Kaggle — mczielinski/bitcoin-historical-data</a>
+            (daily closes &bull; updated daily via GitHub Actions)
         </p>
         <div class="disclaimer">
             <strong>Not financial advice.</strong> This tool is for educational and informational purposes only.
@@ -391,7 +391,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const CACHE_KEY  = 'btc_dca_v4';          // localStorage key (bumped → busts old Binance cache)
 const CACHE_TTL  = 24 * 60 * 60 * 1000;  // 24 hours in ms
-const BTC_ORIGIN = '2013-01-05';          // earliest Kraken XBTUSD daily data
+const BTC_ORIGIN = '2013-01-05';          // earliest date in Kaggle/mczielinski dataset
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOM references
@@ -500,7 +500,7 @@ async function fetchWithRetry(url, retries = 3, baseDelay = 1500, timeout = 1200
  *  1. In-memory session cache        → instant
  *  2. localStorage (< 24 h)          → fast (CDN-busted on each daily deploy)
  *  3. /data/btc-prices.json          → static file, served from Netlify CDN,
- *                                       updated daily by GitHub Actions + Kraken API
+ *                                       updated daily by GitHub Actions + Kaggle API
  *  4. Stale localStorage              → fallback with warning
  *
  * No API key. No external fetch from the browser. No CORS surface.
@@ -522,7 +522,7 @@ async function loadPriceData() {
     }
 
     // 3. Fetch the pre-baked static JSON — generated server-side by GitHub
-    //    Actions every day at 08:00 UTC using Kraken's public OHLC API.
+    //    Actions every day at 08:00 UTC using the Kaggle dataset.
     //    The file is committed to the repo and served straight from the CDN.
     try {
         const res  = await fetchWithRetry('/data/btc-prices.json');
