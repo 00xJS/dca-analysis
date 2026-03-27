@@ -27,7 +27,7 @@ jobs:
       - name: Install Kaggle CLI
         run: pip install kaggle --quiet
 
-      - name: Fetch BTC prices (Kaggle + Kraken gap fill)
+      - name: Fetch BTC prices (Kaggle)
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
