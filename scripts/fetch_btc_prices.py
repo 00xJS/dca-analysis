@@ -2,14 +2,11 @@
 """
 fetch_btc_prices.py
 ───────────────────
-Builds data/btc-prices.json from two sources:
+Builds data/btc-prices.json from Kaggle:
 
-  1. Kaggle — mczielinski/bitcoin-historical-data
-     Minute-level Bitstamp OHLCV from 2012 → near-today.
-     Aggregated to daily closes (last non-NaN close per UTC day).
-
-  2. Kraken — public OHLC API (no key required)
-     Fills any gap between Kaggle's last date and today.
+  mczielinski/bitcoin-historical-data
+  Minute-level Bitstamp OHLCV from 2012 → today.
+  Aggregated to daily closes (last non-NaN close per UTC day).
 
 Run daily via GitHub Actions. Requires env vars:
   KAGGLE_USERNAME  — your Kaggle username
@@ -22,20 +19,12 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
-import urllib.request
-import urllib.error
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-KAGGLE_DATASET  = "mczielinski/bitcoin-historical-data"
-KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
-PAIR            = "XBTUSD"
-INTERVAL        = 1440          # daily candles (minutes)
-REQUEST_DELAY   = 1.2           # seconds between Kraken requests
-MAX_RETRIES     = 3
-OUTPUT_PATH     = Path(__file__).resolve().parent.parent / "data" / "btc-prices.json"
+KAGGLE_DATASET = "mczielinski/bitcoin-historical-data"
+OUTPUT_PATH    = Path(__file__).resolve().parent.parent / "data" / "btc-prices.json"
 
 
 # ── Kaggle: download + parse ───────────────────────────────────────────────────
@@ -105,67 +94,6 @@ def parse_kaggle_csv(csv_file: Path) -> dict[str, float]:
     return daily
 
 
-# ── Kraken: fill the gap ───────────────────────────────────────────────────────
-def fetch_kraken_ohlc(since: int, attempt: int = 0) -> tuple[list, int]:
-    """Fetch one page of daily OHLC candles from Kraken."""
-    url = f"{KRAKEN_OHLC_URL}?pair={PAIR}&interval={INTERVAL}&since={since}"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "btc-dca-calculator/1.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode())
-
-        if data.get("error"):
-            raise RuntimeError(f"Kraken API error: {data['error']}")
-
-        pair_keys = [k for k in data["result"] if k != "last"]
-        if not pair_keys:
-            return [], since
-        candles = data["result"][pair_keys[0]]
-        last_ts = int(data["result"].get("last", since))
-        return candles, last_ts
-
-    except (urllib.error.URLError, RuntimeError) as exc:
-        if attempt < MAX_RETRIES - 1:
-            wait = 2 ** attempt * 2
-            print(f"  Kraken retry {attempt + 1}/{MAX_RETRIES} after {wait}s ({exc})")
-            time.sleep(wait)
-            return fetch_kraken_ohlc(since, attempt + 1)
-        raise
-
-
-def fetch_kraken_gap(from_date_str: str) -> dict[str, float]:
-    """
-    Fetch daily closes from Kraken for dates strictly after from_date_str.
-    Returns {date_str: close_price}.
-    """
-    from_dt  = datetime.strptime(from_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    since_ts = int(from_dt.timestamp())
-    now_ts   = int(time.time())
-    gap: dict[str, float] = {}
-
-    print(f"Fetching Kraken gap: {from_date_str} → today …")
-
-    while since_ts < now_ts:
-        candles, last_ts = fetch_kraken_ohlc(since_ts)
-        if not candles:
-            break
-        for c in candles:
-            ts    = int(c[0])
-            close = float(c[4])
-            if close <= 0:
-                continue
-            date_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-            if date_str > from_date_str:        # only dates we don't have yet
-                gap[date_str] = close
-        if last_ts <= since_ts:
-            break
-        since_ts = last_ts
-        time.sleep(REQUEST_DELAY)
-
-    print(f"  {len(gap)} new day(s) from Kraken")
-    return gap
-
-
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
@@ -176,16 +104,7 @@ def main() -> None:
         print("ERROR: Kaggle parse returned no data. Aborting.")
         sys.exit(1)
 
-    # Fill any gap between Kaggle's last date and today using Kraken
-    last_kaggle_date = max(kaggle_data)
-    print(f"Kaggle data range: {min(kaggle_data)} → {last_kaggle_date}")
-
-    today_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-    if last_kaggle_date < today_str:
-        kraken_gap = fetch_kraken_gap(last_kaggle_date)
-        kaggle_data.update(kraken_gap)
-    else:
-        print("Kaggle data is current — no Kraken gap needed.")
+    print(f"Kaggle data range: {min(kaggle_data)} → {max(kaggle_data)}")
 
     # Convert {date_str: price} → [{ts, price}] sorted ascending
     prices = []
@@ -196,7 +115,7 @@ def main() -> None:
     # Write output
     output = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source":    "Kaggle/mczielinski (minute → daily) + Kraken gap fill",
+        "source":    "Kaggle/mczielinski — minute-level Bitstamp data aggregated to daily closes",
         "count":     len(prices),
         "prices":    prices,
     }
