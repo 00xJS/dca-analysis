@@ -389,7 +389,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
-const CACHE_KEY  = 'btc_dca_v4';          // localStorage key (bumped → busts old Binance cache)
+const CACHE_KEY  = `btc_dca_v5_${new Date().toISOString().split('T')[0]}`;  // date-scoped → busts cache each new day
 const CACHE_TTL  = 24 * 60 * 60 * 1000;  // 24 hours in ms
 const BTC_ORIGIN = '2013-01-05';          // earliest date in Kaggle/mczielinski dataset
 
@@ -525,7 +525,7 @@ async function loadPriceData() {
     //    Actions every day at 08:00 UTC using the Kaggle dataset.
     //    The file is committed to the repo and served straight from the CDN.
     try {
-        const res  = await fetchWithRetry('/data/btc-prices.json');
+        const res  = await fetchWithRetry(`/data/btc-prices.json?d=${new Date().toISOString().split('T')[0]}`);
         const json = await res.json();
 
         if (!json.prices?.length) {
