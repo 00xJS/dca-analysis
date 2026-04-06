@@ -580,8 +580,11 @@ async function initPage() {
     setStatus('loading', 'Loading Bitcoin price data&hellip;');
     try {
         const data     = await loadPriceData();
-        const genLabel = data.generatedAt && data.generatedAt !== 'pending'
-            ? `data updated ${data.generatedAt.split('T')[0]}`
+        const lastTs   = data.prices?.length
+            ? data.prices[data.prices.length - 1].ts
+            : null;
+        const genLabel = lastTs
+            ? `data updated ${new Date(lastTs * 1000).toISOString().split('T')[0]}`
             : `cached ${ageLabel(Date.now() - data.fetchedAt)}`;
         if (data.stale) {
             setStatus('stale',
