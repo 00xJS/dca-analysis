@@ -580,16 +580,18 @@ async function initPage() {
     setStatus('loading', 'Loading Bitcoin price data&hellip;');
     try {
         const data     = await loadPriceData();
-        const lastTs   = data.prices?.length
+        const lastTs      = data.prices?.length
             ? data.prices[data.prices.length - 1].ts
             : null;
-        const genLabel = lastTs
+        const dataAgeMs   = lastTs ? (Date.now() - lastTs * 1000) : Infinity;
+        const isStale     = data.stale || dataAgeMs > 3 * 24 * 60 * 60 * 1000;
+        const genLabel    = lastTs
             ? `data updated ${new Date(lastTs * 1000).toISOString().split('T')[0]}`
             : `cached ${ageLabel(Date.now() - data.fetchedAt)}`;
-        if (data.stale) {
+        if (isStale) {
             setStatus('stale',
                 `&#8383; <strong>$${fmtUSD(data.latestPrice)}</strong>`
-                + `&ensp;&bull;&ensp;&#9888; Using stale cache &mdash; ${genLabel}`);
+                + `&ensp;&bull;&ensp;&#9888; Price data may be outdated &mdash; ${genLabel}`);
         } else {
             setStatus('ok',
                 `&#8383; <strong>$${fmtUSD(data.latestPrice)}</strong>`
