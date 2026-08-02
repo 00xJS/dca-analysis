@@ -396,6 +396,24 @@
 
         tbody tr:hover { background: var(--bg-raised); }
 
+        /* secondary detail inside a metric label (th/td are nowrap, so keep it short) */
+        .sub {
+            font-family: var(--font-mono);
+            font-size: 10.5px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+
+        .result-note {
+            max-width: 720px;
+            margin: 12px auto 0;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--faint);
+            text-align: center;
+        }
+
         .val      { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
         .num      { font-variant-numeric: tabular-nums; }
         .positive { color: var(--live); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -535,7 +553,8 @@
         <div class="inline-fields">
             <div class="field-group">
                 <label for="startDate">Start Date</label>
-                <!-- min/max/value set dynamically in JS -->
+                <!-- min is the legacy floor (BTC price history conventionally starts
+                     2013-04-28); max and the default value are set in initPage() -->
                 <input type="date" id="startDate" required min="2013-04-28">
             </div>
             <div class="field-group">
@@ -547,7 +566,7 @@
                 </select>
             </div>
             <div class="field-group">
-                <label for="amount">Amount (USD)</label>
+                <label for="amount">Amount per purchase (USD)</label>
                 <input type="number" id="amount" required min="1" step="0.01" value="100">
             </div>
         </div>
@@ -557,7 +576,7 @@
     </form>
 
     <!-- Shown while the simulation is running -->
-    <div id="loadingBar" class="loading-bar">
+    <div id="loadingBar" class="loading-bar" role="status">
         <span class="spin"></span>
         <span>Running simulation&hellip;</span>
     </div>
@@ -573,14 +592,14 @@
         <table id="historyTable">
             <thead>
                 <tr>
-                    <th class="sortable" data-col="n">#</th>
-                    <th class="sortable" data-col="date">Date</th>
-                    <th>BTC Price</th>
-                    <th class="sortable" data-col="btcBought">BTC Bought</th>
-                    <th>Total BTC</th>
-                    <th>Total Invested</th>
-                    <th>Value on Date</th>
-                    <th class="sortable" data-col="profit">Profit / Loss</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="n">#</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="date">Date</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="price">BTC Price</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="btcBought">BTC Bought</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="totalBtc">Total BTC</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="totalInvested">Total Invested</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="portfolioValue">Value on Date</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="profit">Profit / Loss</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -612,7 +631,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const CACHE_KEY  = `btc_dca_v5_${new Date().toISOString().split('T')[0]}`;  // date-scoped → busts cache each new day
 const CACHE_TTL  = 24 * 60 * 60 * 1000;  // 24 hours in ms
-const BTC_ORIGIN = '2013-01-05';          // earliest date in Kaggle/mczielinski dataset
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOM references
@@ -663,9 +681,13 @@ function todayStr() {
     return new Date().toISOString().split('T')[0];
 }
 
-/** Format a number as USD with 2 decimal places and thousand separators */
+/** Format a number as USD. `style:'currency'` puts the sign OUTSIDE the symbol
+ *  (-$1,234.56), where hand-prefixing "$" would give the wrong "$-1,234.56". */
 function fmtUSD(n) {
-    return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(n).toLocaleString('en-US', {
+        style: 'currency', currency: 'USD',
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
 }
 
 /** Format a number as 8-decimal BTC */
@@ -804,8 +826,14 @@ async function loadPriceData() {
             generatedAt: json.generated ?? null,
         };
 
-        // Persist — gracefully handle storage quota errors
+        // Persist — gracefully handle storage quota errors.
+        // The key is date-scoped, so drop yesterday's entries first; without this
+        // they accrete ~175KB per visit-day until the quota is hit.
         try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const k = localStorage.key(i);
+                if (k?.startsWith('btc_dca_v5_') && k !== CACHE_KEY) localStorage.removeItem(k);
+            }
             localStorage.setItem(CACHE_KEY, JSON.stringify(result));
         } catch (storageErr) {
             console.warn('localStorage write failed (quota?), cache skipped.', storageErr);
@@ -859,7 +887,7 @@ async function initPage() {
         const genLabel    = lastTs
             ? `latest close ${new Date(lastTs * 1000).toISOString().split('T')[0]}`
             : `cached ${ageLabel(Date.now() - data.fetchedAt)}`;
-        const priceLabel  = `<span class="btc-mark">&#8383;</span> <strong>$${fmtUSD(data.latestPrice)}</strong>`;
+        const priceLabel  = `<span class="btc-mark">&#8383;</span> <strong>${fmtUSD(data.latestPrice)}</strong>`;
         if (isStale) {
             setStatus('stale',
                 `${priceLabel}&ensp;&bull;&ensp;${genLabel} &mdash; may be outdated`);
@@ -980,23 +1008,37 @@ form.addEventListener('submit', async (e) => {
                 <tbody>
                     <tr><td>Duration</td>
                         <td class="val">${duration}</td></tr>
-                    <tr><td>Total Invested</td>
-                        <td class="val">$${fmtUSD(totalInvested)}</td></tr>
+                    <tr><td>Total Invested <span class="sub">${purchases.length} purchases</span></td>
+                        <td class="val">${fmtUSD(totalInvested)}</td></tr>
                     <tr><td>Total BTC Accumulated</td>
                         <td class="val">${fmtBTC(totalBtc)} BTC</td></tr>
                     <tr><td>Average Cost per BTC</td>
-                        <td class="val">$${fmtUSD(avgCost)}</td></tr>
+                        <td class="val">${fmtUSD(avgCost)}</td></tr>
                     <tr><td>Current BTC Price</td>
-                        <td class="val">$${fmtUSD(finalPrice)}</td></tr>
+                        <td class="val">${fmtUSD(finalPrice)}</td></tr>
                     <tr><td>Portfolio Value</td>
-                        <td class="val">$${fmtUSD(finalValue)}</td></tr>
+                        <td class="val">${fmtUSD(finalValue)}</td></tr>
                     <tr><td>Total Profit / Loss</td>
-                        <td class="val ${pClass}">$${fmtUSD(profit)}</td></tr>
+                        <td class="val ${pClass}">${fmtUSD(profit)}</td></tr>
                     <tr><td>Return on Investment</td>
                         <td class="val ${pClass}">${roiSign}${roi}%</td></tr>
                 </tbody>
             </table>
-            </div>`;
+            </div>
+            <p class="result-note">
+                One historical window, not a forecast. A short window mostly measures where
+                Bitcoin happened to be when you started &mdash; the case for DCA rests on
+                horizons measured in years. Change the Start Date and re-run to watch the
+                average cost move. Fees, spreads and taxes are not included.
+            </p>`;
+
+        // ── History table ────────────────────────────────────────────────────
+        //    Rendered BEFORE the chart on purpose: if the Chart.js CDN is blocked
+        //    or fails, the table still reaches the page instead of being skipped
+        //    by the throw.
+        lastPurchases = purchases;  // store for re-sorting
+        renderHistoryTable(purchases);
+        tableWrapper.style.display = 'block';
 
         // ── Chart ────────────────────────────────────────────────────────────
         //    Each purchase row is valued at the close on its OWN date, so the last
@@ -1017,6 +1059,10 @@ form.addEventListener('submit', async (e) => {
             valueData.push(finalValue);
         }
 
+        // Chart.js is a CDN dependency. If it is blocked or fails to parse, the
+        // summary and history table above must still stand, so it gets its own
+        // try/catch rather than taking the whole run down with it.
+        try {
         const t            = deckChartTheme();
 
         if (dcaChart) dcaChart.destroy();
@@ -1063,10 +1109,15 @@ form.addEventListener('submit', async (e) => {
                         borderWidth: 1,
                         padding: 10,
                         callbacks: {
-                            label: ctx => ` ${ctx.dataset.label}: $${fmtUSD(ctx.parsed.y)}`,
+                            label: ctx => ` ${ctx.dataset.label}: ${fmtUSD(ctx.parsed.y)}`,
                             afterBody: (tooltipItems) => {
-                                const invested = tooltipItems[0]?.parsed.y;
-                                const value    = tooltipItems[1]?.parsed.y;
+                                // Look datasets up by label — hiding either series
+                                // via the legend reorders/removes tooltip items, so
+                                // indexing [0]/[1] silently drops the ROI readout.
+                                const at = (label) => tooltipItems
+                                    .find(i => i.dataset.label === label)?.parsed.y;
+                                const invested = at('Total Invested ($)');
+                                const value    = at('Portfolio Value ($)');
                                 if (invested && invested > 0 && value != null) {
                                     const roiPct = ((value - invested) / invested * 100).toFixed(2);
                                     const sign   = roiPct >= 0 ? '+' : '';
@@ -1091,11 +1142,10 @@ form.addEventListener('submit', async (e) => {
             },
         });
         chartPanel.style.display = 'block';
-
-        // ── History table (with sort support) ─────────────────────────────
-        lastPurchases = purchases;  // store for re-sorting
-        renderHistoryTable(purchases);
-        tableWrapper.style.display = 'block';
+        } catch (chartErr) {
+            console.error('[dca] chart could not be rendered:', chartErr);
+            chartPanel.style.display = 'none';
+        }
 
     } catch (err) {
         console.error('[dca] simulation failed:', err);
@@ -1123,20 +1173,19 @@ function renderHistoryTable(data) {
         row.innerHTML = `
             <td class="num">${p.n}</td>
             <td class="num">${p.date}</td>
-            <td class="num">$${fmtUSD(p.price)}</td>
+            <td class="num">${fmtUSD(p.price)}</td>
             <td class="num">${fmtBTC(p.btcBought)}</td>
             <td class="num">${fmtBTC(p.totalBtc)}</td>
-            <td class="num">$${fmtUSD(p.totalInvested)}</td>
-            <td class="num">$${fmtUSD(p.portfolioValue)}</td>
-            <td class="${cls}">$${fmtUSD(p.profit)}</td>
+            <td class="num">${fmtUSD(p.totalInvested)}</td>
+            <td class="num">${fmtUSD(p.portfolioValue)}</td>
+            <td class="${cls}">${fmtUSD(p.profit)}</td>
         `;
         tableBody.appendChild(row);
     }
 }
 
-/** Handle clicks on sortable column headers */
-document.querySelector('#historyTable thead').addEventListener('click', (e) => {
-    const th = e.target.closest('th.sortable');
+/** Sort by a column key and re-render, keeping header state and aria-sort in step */
+function sortHistoryBy(th) {
     if (!th || !lastPurchases.length) return;
 
     const col = th.dataset.col;
@@ -1149,11 +1198,13 @@ document.querySelector('#historyTable thead').addEventListener('click', (e) => {
         sortDir = 'asc';
     }
 
-    // Update header classes
+    // Update header classes + expose the state to assistive tech
     document.querySelectorAll('#historyTable th.sortable').forEach(h => {
         h.classList.remove('asc', 'desc');
+        h.setAttribute('aria-sort', 'none');
     });
     th.classList.add(sortDir);
+    th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
 
     // Sort a copy of the data
     const sorted = [...lastPurchases].sort((a, b) => {
@@ -1164,6 +1215,16 @@ document.querySelector('#historyTable thead').addEventListener('click', (e) => {
     });
 
     renderHistoryTable(sorted);
+}
+
+const historyHead = document.querySelector('#historyTable thead');
+historyHead.addEventListener('click', (e) => sortHistoryBy(e.target.closest('th.sortable')));
+historyHead.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    e.preventDefault();          // stop Space scrolling the page
+    sortHistoryBy(th);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
