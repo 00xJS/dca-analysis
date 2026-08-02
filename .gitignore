@@ -1,6 +1,9 @@
-# Local-only theme/design handoff notes — never publish
-THEME-HANDOFF.md
-HANDOFF.md
+# Local-only handoff / working notes — never publish.
+# Pattern, not a list, so new handoff files are covered by default.
+*HANDOFF.md
+
+# Local agent/editor config (settings.local.json is machine-specific by design)
+.claude/
 
 # macOS
 .DS_Store
