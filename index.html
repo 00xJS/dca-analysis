@@ -3,93 +3,251 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0d1c">
     <title>₿itcoin DCA Calculator</title>
+    <meta name="description" content="Free Bitcoin dollar-cost-averaging calculator. Pick a start date, interval and amount to see what that plan would be worth today, using real daily closes.">
+    <!-- Shared-link card title: plain "Bitcoin" so the ₿ glyph can't read as a broken
+         character in Slack/iMessage previews. The on-page h1 keeps the ₿. -->
+    <meta property="og:title" content="Bitcoin DCA Calculator">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* ===== Observation Deck design tokens ===== */
         :root {
-            --primary:      #f7931a;
-            --primary-dark: #c96f0d;
-            --blue:         #007bff;
-            --border:       #ddd;
-            --bg:           #f4f5f7;
-            --card:         #ffffff;
-            --text:         #222;
-            --muted:        #666;
-            --success:      #1a9e4a;
-            --danger:       #d32f2f;
-            --focus-ring:   rgba(247,147,26,0.35);
+            color-scheme: dark;          /* native controls, scrollbars, date picker render dark */
+
+            /* surfaces */
+            --bg:           #0a0d1c;
+            --bg-raised:    #10142e;
+            --card:         #12163a;
+            --card-chrome:  #0c0f26;     /* header/toolbar strips */
+            --border:       rgba(255, 255, 255, 0.09);
+            --border-hover: rgba(255, 154, 68, 0.55);
+
+            /* text */
+            --text:  #e8eaf6;
+            --muted: #9ba1c5;
+            --faint: #7b81aa;            /* 5.12:1 on --bg, 4.63:1 on --card */
+
+            /* accents */
+            --accent:      #ff9a44;      /* links, primary emphasis */
+            --accent-deep: #e8792b;      /* hover / pressed */
+            --magenta:     #c23e8c;      /* secondary accent, sparingly */
+
+            /* semantic */
+            --live:         #3ddc84;     /* success / up / positive */
+            --warn:         #ffc24b;
+            --down:         #ff6b6b;     /* error / down / negative */
+            --series-blue:  #5b8def;     /* 2nd chart series */
+            --grid:         rgba(255, 255, 255, 0.07);      /* chart gridlines */
+            --fill-accent:  rgba(255, 154, 68, 0.12);       /* low-alpha area fills */
+
+            /* components */
+            --tag-bg:   rgba(255, 154, 68, 0.10);
+            --tag-text: #ffb877;
+            --shadow:   0 14px 40px rgba(0, 0, 0, 0.45);
+            --btn-ink:  #0a0d1c;         /* text on solid accent buttons */
+            --btc:      #f7931a;         /* the ₿ glyph ONLY — never UI accents */
+
+            /* type */
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+            --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+            /* shape */
+            --radius-card:    12px;
+            --radius-control: 8px;
+            --radius-pill:    999px;
         }
 
         *, *::before, *::after { box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            font-family: var(--font-sans);
             margin: 0;
-            padding: 20px;
+            padding: 28px 20px;
             background: var(--bg);
             color: var(--text);
             line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* ambient glow */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background:
+                radial-gradient(900px 480px at 15% -10%, rgba(232, 121, 43, 0.10), transparent 60%),
+                radial-gradient(800px 480px at 90% 0%, rgba(194, 62, 140, 0.09), transparent 60%);
+        }
+
+        ::selection { background: var(--accent-deep); color: var(--btn-ink); }
+        a { color: var(--accent); }
+        a:hover { color: var(--accent-deep); }
+        a:focus-visible, button:focus-visible, summary:focus-visible, th.sortable:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+
+        @keyframes deck-pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.35; }
+        }
+
+        /* ── Shell ── */
         .container {
-            max-width: 880px;
+            max-width: 1100px;
             margin: auto;
-            padding: 28px 32px;
+            padding: 28px 32px 24px;
             background: var(--card);
-            box-shadow: 0 2px 20px rgba(0,0,0,0.09);
-            border-radius: 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow);
         }
 
         /* ── Header ── */
+        .kicker {
+            display: block;
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 10.5px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--faint);
+            text-decoration: none;
+            margin-bottom: 10px;
+            transition: color 0.2s ease;
+        }
+        .kicker:hover { color: var(--accent); }
+
         h1 {
-            color: var(--primary);
+            color: var(--text);
             text-align: center;
             margin: 0 0 6px;
             font-size: 2rem;
+            font-weight: 650;
             letter-spacing: -0.5px;
         }
+        .btc-mark { color: var(--btc); }
 
-        h3 {
-            color: var(--blue);
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        p {
+        .lede {
             text-align: center;
             color: var(--muted);
             margin: 0 0 14px;
             font-size: 14px;
         }
+        .lede strong { color: var(--text); font-weight: 600; }
 
-        /* ── Data status bar ── */
-        .data-status {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 9px 16px;
-            border-radius: 8px;
-            margin: 12px 0 22px;
-            font-size: 13.5px;
-            min-height: 40px;
-            transition: background 0.3s, border-color 0.3s;
+        /* ── "How this works" collapsible ── */
+        .how {
+            max-width: 720px;
+            margin: 0 auto;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-card);
+            font-size: 13px;
+            color: var(--muted);
         }
-        .data-status.loading { background:#f5f5f5; border:1px solid #ddd; color:#888; }
-        .data-status.ok      { background:#edfaf2; border:1px solid #9fe0b8; color:#1a6e3a; }
-        .data-status.stale   { background:#fffbee; border:1px solid #f0d060; color:#7a5800; }
-        .data-status.error   { background:#fff4f4; border:1px solid #f5b8b8; color:#8a1a1a; }
+        .how > summary {
+            cursor: pointer;
+            padding: 10px 16px;
+            list-style: none;
+            font-family: var(--font-mono);
+            font-size: 10.5px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--faint);
+            transition: color 0.2s ease;
+        }
+        .how > summary::-webkit-details-marker { display: none; }
+        .how > summary::after {
+            content: '+';
+            float: right;
+            font-size: 14px;
+            line-height: 1.1;
+        }
+        .how[open] > summary::after { content: '\2212'; }   /* − */
+        .how > summary:hover { color: var(--accent); }
+
+        .how-body { padding: 2px 18px 15px; }
+        .how-body h3 {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--faint);
+            margin: 12px 0 6px;
+        }
+        .how-body ul { margin: 0; padding-left: 18px; line-height: 1.6; }
+        .how-body li { margin-bottom: 7px; }
+        .how-body li:last-child { margin-bottom: 0; }
+        .how-body strong { color: var(--text); font-weight: 600; }
+
+        /* ── Status chip ── */
+        .chip-row {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 14px 0 22px;
+        }
+        /* static provenance chip — no state, so no status dot */
+        .chip--info { color: var(--faint); }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-pill);
+            background: var(--bg-raised);
+            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            max-width: 100%;
+            text-align: center;
+            line-height: 1.7;
+        }
+        .chip .dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--faint);
+            flex-shrink: 0;
+        }
+        .chip strong {
+            color: var(--accent);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .chip.ok   { color: var(--live); }
+        .chip.ok   .dot { background: var(--live); box-shadow: 0 0 8px var(--live); animation: deck-pulse 2.4s ease-in-out infinite; }
+        .chip.warn { color: var(--warn); }
+        .chip.warn .dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+        .chip.down { color: var(--down); }
+        .chip.down .dot { background: var(--down); box-shadow: 0 0 8px var(--down); }
+
+        /* loading state swaps the dot for a spinner */
+        .chip .spin           { display: none; }
+        .chip.loading .spin   { display: inline-block; }
+        .chip.loading .dot    { display: none; }
 
         /* ── Spinner ── */
         .spin {
-            display: inline-block;
-            width: 14px; height: 14px;
+            width: 12px; height: 12px;
             border: 2px solid currentColor;
             border-top-color: transparent;
             border-radius: 50%;
             animation: rotate 0.75s linear infinite;
             flex-shrink: 0;
-            vertical-align: middle;
         }
         @keyframes rotate { to { transform: rotate(360deg); } }
 
@@ -100,7 +258,7 @@
             align-items: flex-end;
             justify-content: center;
             flex-wrap: wrap;
-            margin: 16px 0;
+            margin: 20px 0 0;
         }
 
         .field-group {
@@ -110,58 +268,61 @@
         }
 
         label {
+            font-family: var(--font-mono);
             font-weight: 600;
-            font-size: 11.5px;
+            font-size: 10.5px;
             text-transform: uppercase;
-            letter-spacing: 0.6px;
-            color: var(--muted);
-            margin-bottom: 5px;
+            letter-spacing: 0.08em;
+            color: var(--faint);
+            margin-bottom: 6px;
             display: block;
         }
 
         input, select {
-            padding: 9px 12px;
+            font-family: var(--font-sans);
             font-size: 14px;
-            border: 1.5px solid var(--border);
-            border-radius: 7px;
-            width: 175px;
-            background: white;
-            transition: border-color 0.18s, box-shadow 0.18s;
             color: var(--text);
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            padding: 9px 12px;
+            width: 175px;
+            font-variant-numeric: tabular-nums;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
+        input:hover, select:hover { border-color: var(--border-hover); }
         input:focus, select:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px var(--focus-ring);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(255, 154, 68, 0.18);
         }
-        input:invalid { border-color: var(--danger); }
+        input:invalid { border-color: var(--down); }
 
         .form-actions {
             display: flex;
             justify-content: center;
-            margin-top: 18px;
+            margin-top: 20px;
         }
 
         button {
-            padding: 11px 32px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-            background: var(--primary);
-            color: white;
+            font-family: var(--font-sans);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--btn-ink);       /* dark ink on orange — white fails contrast */
+            background: var(--accent);
             border: none;
-            border-radius: 7px;
-            letter-spacing: 0.3px;
-            transition: background 0.18s, transform 0.1s, box-shadow 0.18s;
-            box-shadow: 0 2px 8px rgba(247,147,26,0.3);
+            border-radius: var(--radius-control);
+            padding: 10px 28px;
+            cursor: pointer;
+            letter-spacing: 0.02em;
+            transition: background 0.2s ease, transform 0.2s ease;
         }
         button:hover:not(:disabled) {
-            background: var(--primary-dark);
+            background: var(--accent-deep);
             transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(247,147,26,0.35);
         }
         button:active:not(:disabled) { transform: translateY(0); }
-        button:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
 
         /* ── Loading bar (shown during simulation) ── */
         .loading-bar {
@@ -169,150 +330,206 @@
             align-items: center;
             justify-content: center;
             gap: 10px;
-            padding: 12px;
-            margin: 14px 0 0;
-            background: #fff8ee;
-            border: 1px solid #ffd090;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #7a4800;
+            padding: 11px;
+            margin: 18px 0 0;
+            background: var(--tag-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--tag-text);
         }
         .loading-bar.show { display: flex; }
 
         /* ── Error ── */
-        #error {
-            color: var(--danger);
+        #error:not(:empty) {
+            color: var(--down);
             text-align: center;
             font-size: 14px;
-            padding: 8px;
-            margin: 8px 0;
-            font-weight: 500;
-        }
-
-        /* ── Summary table ── */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            font-size: 14px;
-        }
-
-        th, td {
-            border: 1px solid var(--border);
             padding: 10px 14px;
-            text-align: right;
-        }
-        th:first-child, td:first-child { text-align: left; }
-
-        th {
-            background: #f6f8fa;
-            font-weight: 600;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            color: var(--muted);
+            margin: 16px 0 0;
+            background: rgba(255, 107, 107, 0.08);   /* --down @ 8%  */
+            border: 1px solid rgba(255, 107, 107, 0.30);  /* --down @ 30% */
+            border-radius: var(--radius-control);
         }
 
-        .val      { font-weight: 600; }
-        .positive { color: var(--success); font-weight: 700; }
-        .negative { color: var(--danger);  font-weight: 700; }
-
-        /* ── Chart ── */
-        canvas {
-            max-width: 100%;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            margin-top: 22px;
-        }
-
-        /* ── History table ── */
+        /* ── Tables ── */
         .table-wrapper {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             max-width: 100%;
             margin-top: 22px;
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: var(--radius-card);
         }
 
-        #historyTable {
+        table {
+            width: 100%;
             min-width: 100%;
-            border: none;
-            margin-top: 0;
+            border-collapse: collapse;
+            font-size: 13.5px;
         }
-        #historyTable th, #historyTable td {
-            border-left: none;
-            border-right: none;
+
+        th, td {
+            padding: 10px 14px;
+            text-align: right;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
         }
-        #historyTable tr:last-child td { border-bottom: none; }
-        #historyTable thead th { border-top: none; }
+        th:first-child, td:first-child { text-align: left; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        th {
+            background: var(--card-chrome);
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 10.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--faint);
+        }
+
+        td { color: var(--muted); }
+        td:first-child { color: var(--text); }
+
+        tbody tr:hover { background: var(--bg-raised); }
+
+        .val      { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .num      { font-variant-numeric: tabular-nums; }
+        .positive { color: var(--live); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .negative { color: var(--down); font-weight: 600; font-variant-numeric: tabular-nums; }
 
         /* ── Sortable columns ── */
         th.sortable {
             cursor: pointer;
             user-select: none;
             position: relative;
-            padding-right: 22px;
+            padding-right: 24px;
+            transition: color 0.2s ease;
         }
-        th.sortable:hover { background: #edf0f3; }
+        th.sortable:hover { color: var(--accent); background: var(--bg-raised); }
         th.sortable::after {
             content: '⇅';
             position: absolute;
-            right: 6px;
-            opacity: 0.35;
+            right: 7px;
+            opacity: 0.4;
             font-size: 11px;
         }
-        th.sortable.asc::after  { content: '▲'; opacity: 0.7; }
-        th.sortable.desc::after { content: '▼'; opacity: 0.7; }
+        th.sortable.asc::after  { content: '▲'; opacity: 1; color: var(--accent); }
+        th.sortable.desc::after { content: '▼'; opacity: 1; color: var(--accent); }
+
+        /* ── Chart ── */
+        .chart-panel {
+            margin-top: 22px;
+            padding: 16px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-card);
+        }
+        canvas { max-width: 100%; }
 
         /* ── Footer ── */
         .footer {
             text-align: center;
             margin-top: 32px;
-            padding-top: 16px;
+            padding-top: 18px;
             border-top: 1px solid var(--border);
             font-size: 13px;
-            color: var(--muted);
+            color: var(--faint);
         }
-        .footer a { color: var(--blue); text-decoration: none; }
-        .footer a:hover { text-decoration: underline; }
+        .footer p { margin: 0 0 8px; }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { color: var(--accent-deep); text-decoration: underline; }
 
         .disclaimer {
             font-size: 12px;
-            color: #888;
-            margin-top: 10px;
-            padding: 10px 14px;
-            background: #f9f9f9;
-            border-radius: 6px;
-            border-left: 3px solid #e0a040;
+            color: var(--faint);
+            margin-top: 14px;
+            padding: 12px 14px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent-deep);
+            border-radius: var(--radius-control);
             text-align: left;
             line-height: 1.6;
         }
+        .disclaimer strong { color: var(--warn); }
 
         /* ── Responsive ── */
         @media (max-width: 620px) {
-            body { padding: 10px; }
-            .container { padding: 18px 16px; border-radius: 10px; }
-            h1 { font-size: 1.55rem; }
+            body { padding: 12px; }
+            .container { padding: 20px 16px; }
+            h1 { font-size: 1.5rem; }
             .inline-fields { flex-direction: column; align-items: center; }
             input, select { width: 230px; }
+            .chip { font-size: 10px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 <body>
 <div class="container">
 
-    <h1>&#8383;itcoin DCA Calculator</h1>
+    <a class="kicker" href="https://observation-deck.netlify.app/">Observation Deck / DCA Analysis</a>
 
-    <!-- Live status bar: shows current BTC price + cache age -->
-    <div id="dataStatus" class="data-status loading">
-        <span id="statusText">Loading Bitcoin price data&hellip;</span>
+    <h1><span class="btc-mark">&#8383;</span>itcoin DCA Calculator</h1>
+
+    <!-- Live status chip: current BTC price + data freshness -->
+    <div class="chip-row">
+        <div id="dataStatus" class="chip loading" role="status">
+            <span class="spin" aria-hidden="true"></span>
+            <span class="dot" aria-hidden="true"></span>
+            <span id="statusText">Loading Bitcoin price data&hellip;</span>
+        </div>
+        <div class="chip chip--info">
+            <span id="coverageText">Bitstamp daily closes</span>
+        </div>
     </div>
 
-    <p>
-        Simulate investing a fixed amount at regular intervals.<br>
+    <p class="lede">
+        <strong>Dollar-cost averaging</strong> — a fixed dollar amount, bought on a fixed schedule —
+        replayed against real Bitcoin closing prices. A backtest, not a forecast.<br>
         Set your <strong>Start Date</strong>, <strong>Frequency</strong>, and <strong>Amount ($)</strong>, then click <strong>Run Simulation</strong>.
     </p>
+
+    <details class="how">
+        <summary>How this works</summary>
+        <div class="how-body">
+
+            <h3>The simulation</h3>
+            <ul>
+                <li><strong>&ldquo;Monthly&rdquo; means every 30 days</strong>, not the same date each
+                    calendar month — about 12.2 buys a year, and the date drifts earlier over time.
+                    Weekly is 7 days, bi-weekly is 14.</li>
+                <li>Each purchase fills at that <strong>UTC day&rsquo;s closing price</strong> — the most
+                    recent close on or before the date, never a later one. Intraday highs and lows are
+                    ignored.</li>
+                <li><strong>No fees, spreads, or taxes.</strong> A platform charging ~1% a buy would
+                    leave you ~1% less Bitcoin every time, so every figure here is an optimistic upper
+                    bound. Nothing is ever sold — profit is unrealised.</li>
+                <li>Buying continues <strong>through today</strong>, so an earlier start date also means
+                    more total dollars invested. Compare runs on ROI, not on profit.</li>
+            </ul>
+
+            <h3>Reading the results</h3>
+            <ul>
+                <li><strong>Average Cost per BTC</strong> lands below the average price you actually
+                    paid — a fixed dollar amount buys more Bitcoin when the price is low. That gap is
+                    dollar-cost averaging doing its job.</li>
+                <li><strong>Return on Investment</strong> is the total across the whole duration, not a
+                    yearly rate. Don&rsquo;t divide it by the number of years.</li>
+                <li><strong>Portfolio Value</strong> prices your whole stack at the most recent daily
+                    close. In the history table, <strong>Value on Date</strong> prices it at that
+                    row&rsquo;s date instead — which is why the last row and the summary differ.</li>
+            </ul>
+
+        </div>
+    </details>
 
     <form id="dcaForm">
         <div class="inline-fields">
@@ -345,9 +562,12 @@
         <span>Running simulation&hellip;</span>
     </div>
 
-    <div id="error"></div>
+    <div id="error" role="alert"></div>
     <div id="results"></div>
-    <canvas id="dcaChart" style="display:none;"></canvas>
+
+    <div id="chartPanel" class="chart-panel" style="display:none;">
+        <canvas id="dcaChart"></canvas>
+    </div>
 
     <div id="tableWrapper" class="table-wrapper" style="display:none;">
         <table id="historyTable">
@@ -359,7 +579,7 @@
                     <th class="sortable" data-col="btcBought">BTC Bought</th>
                     <th>Total BTC</th>
                     <th>Total Invested</th>
-                    <th>Portfolio Value</th>
+                    <th>Value on Date</th>
                     <th class="sortable" data-col="profit">Profit / Loss</th>
                 </tr>
             </thead>
@@ -369,7 +589,8 @@
 
     <footer class="footer">
         <p>
-            <a href="https://observation-deck.netlify.app/">Observation Deck</a> &nbsp;|&nbsp;
+            <a href="https://observation-deck.netlify.app/">Observation Deck</a> &nbsp;&middot;&nbsp;
+            JS &nbsp;&middot;&nbsp;
             <a href="https://github.com/00xJS/dca-analysis">GitHub</a>
         </p>
         <p>
@@ -399,6 +620,7 @@ const BTC_ORIGIN = '2013-01-05';          // earliest date in Kaggle/mczielinski
 const form          = document.getElementById('dcaForm');
 const submitBtn     = document.getElementById('submitBtn');
 const chartCanvas   = document.getElementById('dcaChart');
+const chartPanel    = document.getElementById('chartPanel');
 const resultsDiv    = document.getElementById('results');
 const errorDiv      = document.getElementById('error');
 const tableBody     = document.querySelector('#historyTable tbody');
@@ -410,6 +632,27 @@ let   dcaChart;
 
 // In-memory cache so re-running simulations doesn't re-parse localStorage
 let sessionData = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// deck-chart-theme — call once before creating charts. Dark is the only theme,
+// so the tokens are read at build time and never need a matchMedia listener.
+// ─────────────────────────────────────────────────────────────────────────────
+function deckChartTheme() {
+    const css = getComputedStyle(document.documentElement);
+    const v = (n) => css.getPropertyValue(n).trim();
+    Chart.defaults.color = v('--muted');
+    Chart.defaults.borderColor = v('--grid');
+    Chart.defaults.font.family = v('--font-sans');
+    return {
+        accent: v('--accent'), accentDeep: v('--accent-deep'), magenta: v('--magenta'),
+        live: v('--live'), warn: v('--warn'), down: v('--down'),
+        text: v('--text'), muted: v('--muted'), faint: v('--faint'),
+        border: v('--border'),
+        grid: v('--grid'), fill: v('--fill-accent'),
+        tooltipBg: v('--bg-raised'),
+        series: [v('--accent'), v('--series-blue'), v('--live'), v('--magenta'), v('--warn'), v('--down')],
+    };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility helpers
@@ -453,18 +696,32 @@ function calcDuration(start, end) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Status bar helper
+// Errors
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Build an error that carries a visitor-safe sentence in `.user`.
+ * The UI shows `.user`; the raw technical detail stays in `.message` for the
+ * console, so operator instructions never reach a stranger's screen.
+ */
+function userError(userMessage, detail) {
+    const err = new Error(detail || userMessage);
+    err.user = userMessage;
+    return err;
+}
+
+/** Visitor-safe sentence for any error, including ones we didn't raise. */
+function userMessageFor(err, fallback) {
+    return err?.user || fallback;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status chip helper
 // ─────────────────────────────────────────────────────────────────────────────
 function setStatus(state, html) {
-    // state: 'loading' | 'ok' | 'stale' | 'error'
-    dataStatusEl.className = `data-status ${state}`;
-    const icon = {
-        loading: '',
-        ok:      '&#10003;',   // ✓
-        stale:   '&#9888;',    // ⚠
-        error:   '&#10007;',   // ✗
-    }[state] || '';
-    statusTextEl.innerHTML = `${icon}&ensp;${html}`;
+    // state: 'loading' | 'ok' | 'stale' | 'error' → deck chip modifiers
+    const modifier = { loading: 'loading', ok: 'ok', stale: 'warn', error: 'down' }[state] || '';
+    dataStatusEl.className = `chip ${modifier}`;
+    statusTextEl.innerHTML = html;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -477,8 +734,12 @@ async function fetchWithRetry(url, retries = 3, baseDelay = 1500, timeout = 1200
         try {
             const res = await fetch(url, { signal: ctrl.signal });
             clearTimeout(tid);
-            if (res.status === 429) throw new Error('Rate limited by API (429). Please wait a moment and try again.');
-            if (!res.ok)            throw new Error(`API returned HTTP ${res.status}`);
+            if (res.status === 429) throw userError(
+                'The price data is temporarily unavailable.',
+                `HTTP 429 (rate limited) from ${url}`);
+            if (!res.ok) throw userError(
+                'The price data could not be loaded.',
+                `HTTP ${res.status} from ${url}`);
             return res;
         } catch (err) {
             clearTimeout(tid);
@@ -529,9 +790,10 @@ async function loadPriceData() {
         const json = await res.json();
 
         if (!json.prices?.length) {
-            throw new Error(
-                'Price data file is empty — the daily GitHub Actions job may not have run yet. ' +
-                'Trigger it manually from the Actions tab and redeploy.'
+            throw userError(
+                'No Bitcoin price data is available right now.',
+                'data/btc-prices.json parsed but contained no prices — the daily update job ' +
+                'may not have run; trigger it from the Actions tab and redeploy.'
             );
         }
 
@@ -576,6 +838,13 @@ async function initPage() {
     startInput.max   = today;
     startInput.value = oneYearAgo.toISOString().split('T')[0];
 
+    // Read the earliest simulatable date off the picker itself, so the header
+    // chip can never advertise a range the date input would reject.
+    if (startInput.min) {
+        document.getElementById('coverageText').textContent =
+            `Bitstamp daily closes back to ${startInput.min}`;
+    }
+
     // Pre-fetch price data so the first "Run Simulation" is instant
     setStatus('loading', 'Loading Bitcoin price data&hellip;');
     try {
@@ -585,20 +854,23 @@ async function initPage() {
             : null;
         const dataAgeMs   = lastTs ? (Date.now() - lastTs * 1000) : Infinity;
         const isStale     = data.stale || dataAgeMs > 3 * 24 * 60 * 60 * 1000;
+        // Name what the number is. Unlabelled, "₿ $62,908.67" reads as a live
+        // ticker; it is the most recent daily close and can be days behind.
         const genLabel    = lastTs
-            ? `data updated ${new Date(lastTs * 1000).toISOString().split('T')[0]}`
+            ? `latest close ${new Date(lastTs * 1000).toISOString().split('T')[0]}`
             : `cached ${ageLabel(Date.now() - data.fetchedAt)}`;
+        const priceLabel  = `<span class="btc-mark">&#8383;</span> <strong>$${fmtUSD(data.latestPrice)}</strong>`;
         if (isStale) {
             setStatus('stale',
-                `&#8383; <strong>$${fmtUSD(data.latestPrice)}</strong>`
-                + `&ensp;&bull;&ensp;&#9888; Price data may be outdated &mdash; ${genLabel}`);
+                `${priceLabel}&ensp;&bull;&ensp;${genLabel} &mdash; may be outdated`);
         } else {
-            setStatus('ok',
-                `&#8383; <strong>$${fmtUSD(data.latestPrice)}</strong>`
-                + `&ensp;&bull;&ensp;${genLabel}`);
+            setStatus('ok', `${priceLabel}&ensp;&bull;&ensp;${genLabel}`);
         }
+        submitBtn.disabled = false;   // keep initPage idempotent after a failed attempt
     } catch (err) {
-        setStatus('error', `Could not load price data: ${err.message}. Please refresh the page.`);
+        console.error('[dca] price data failed to load:', err);
+        setStatus('error', userMessageFor(err, 'Bitcoin price data could not be loaded.')
+            + ' Refresh the page to try again.');
         submitBtn.disabled = true; // nothing to simulate without data
     }
 }
@@ -612,7 +884,7 @@ form.addEventListener('submit', async (e) => {
     // Reset UI
     errorDiv.textContent        = '';
     resultsDiv.innerHTML        = '';
-    chartCanvas.style.display   = 'none';
+    chartPanel.style.display    = 'none';
     tableWrapper.style.display  = 'none';
     loadingBar.classList.add('show');
     submitBtn.disabled = true;
@@ -623,9 +895,9 @@ form.addEventListener('submit', async (e) => {
         const investAmount  = parseFloat(document.getElementById('amount').value);
         const endDate       = new Date(); // always "today" — no hardcoded cutoff
 
-        if (isNaN(startDate.getTime())) throw new Error('Invalid start date.');
-        if (startDate >= endDate)       throw new Error('Start date must be before today.');
-        if (investAmount <= 0)          throw new Error('Investment amount must be greater than 0.');
+        if (isNaN(startDate.getTime())) throw userError('Please enter a valid start date.');
+        if (startDate >= endDate)       throw userError('Your start date must be before today.');
+        if (investAmount < 1)           throw userError('Enter an amount of $1 or more per purchase.');
 
         // Retrieve cached price data (should already be loaded by initPage)
         const { prices } = await loadPriceData();
@@ -675,7 +947,11 @@ form.addEventListener('submit', async (e) => {
         }
 
         if (purchases.length === 0) {
-            throw new Error('No purchases could be simulated. The start date may be outside available data.');
+            const from = new Date(prices[0].ts * 1000).toISOString().split('T')[0];
+            const to   = new Date(prices[prices.length - 1].ts * 1000).toISOString().split('T')[0];
+            throw userError(
+                `No purchases landed inside the available price data, which runs ${from} to ${to}. `
+                + 'Try a different start date.');
         }
 
         // ── Final metrics use the most recent available price ───────────────
@@ -698,6 +974,7 @@ form.addEventListener('submit', async (e) => {
 
         // ── Summary table ───────────────────────────────────────────────────
         resultsDiv.innerHTML = `
+            <div class="table-wrapper">
             <table>
                 <thead><tr><th>Metric</th><th>Value</th></tr></thead>
                 <tbody>
@@ -718,12 +995,29 @@ form.addEventListener('submit', async (e) => {
                     <tr><td>Return on Investment</td>
                         <td class="val ${pClass}">${roiSign}${roi}%</td></tr>
                 </tbody>
-            </table>`;
+            </table>
+            </div>`;
 
         // ── Chart ────────────────────────────────────────────────────────────
+        //    Each purchase row is valued at the close on its OWN date, so the last
+        //    purchase can sit days behind today. Extend both series to the latest
+        //    close so the line ends on the same Portfolio Value the summary reports.
+        //    No purchase is added — Total Invested stays flat across that last step.
         const labels       = purchases.map(p => p.date);
         const investedData = purchases.map(p => p.totalInvested);
         const valueData    = purchases.map(p => p.portfolioValue);
+
+        //    Only extend when the latest close is genuinely AFTER the last purchase.
+        //    If the last purchase already fell on (or after) that close, it is priced
+        //    at the same number and appending would put the axis out of order.
+        const finalDate = new Date(prices[finalIdx].ts * 1000).toISOString().split('T')[0];
+        if (finalDate > labels[labels.length - 1]) {
+            labels.push(finalDate);
+            investedData.push(totalInvested);
+            valueData.push(finalValue);
+        }
+
+        const t            = deckChartTheme();
 
         if (dcaChart) dcaChart.destroy();
         dcaChart = new Chart(chartCanvas, {
@@ -734,8 +1028,8 @@ form.addEventListener('submit', async (e) => {
                     {
                         label: 'Total Invested ($)',
                         data: investedData,
-                        borderColor: '#6c757d',
-                        backgroundColor: 'rgba(108,117,125,0.07)',
+                        borderColor: t.muted,
+                        backgroundColor: 'rgba(155, 161, 197, 0.07)',  // --muted @ 7%
                         fill: true,
                         tension: 0.3,
                         pointRadius: 0,
@@ -744,8 +1038,8 @@ form.addEventListener('submit', async (e) => {
                     {
                         label: 'Portfolio Value ($)',
                         data: valueData,
-                        borderColor: '#f7931a',
-                        backgroundColor: 'rgba(247,147,26,0.08)',
+                        borderColor: t.accent,
+                        backgroundColor: t.fill,
                         fill: true,
                         tension: 0.3,
                         pointRadius: 0,
@@ -757,8 +1051,17 @@ form.addEventListener('submit', async (e) => {
                 responsive: true,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { position: 'top' },
+                    legend: {
+                        position: 'top',
+                        labels: { color: t.muted, usePointStyle: true, boxWidth: 8, padding: 16 },
+                    },
                     tooltip: {
+                        backgroundColor: t.tooltipBg,
+                        titleColor: t.text,
+                        bodyColor: t.muted,
+                        borderColor: t.grid,
+                        borderWidth: 1,
+                        padding: 10,
                         callbacks: {
                             label: ctx => ` ${ctx.dataset.label}: $${fmtUSD(ctx.parsed.y)}`,
                             afterBody: (tooltipItems) => {
@@ -775,14 +1078,19 @@ form.addEventListener('submit', async (e) => {
                     },
                 },
                 scales: {
+                    x: {
+                        grid:  { color: t.grid },
+                        ticks: { color: t.faint, maxRotation: 0, autoSkipPadding: 24 },
+                    },
                     y: {
                         beginAtZero: true,
-                        ticks: { callback: v => '$' + Number(v).toLocaleString() },
+                        grid:  { color: t.grid },
+                        ticks: { color: t.faint, callback: v => '$' + Number(v).toLocaleString() },
                     },
                 },
             },
         });
-        chartCanvas.style.display = 'block';
+        chartPanel.style.display = 'block';
 
         // ── History table (with sort support) ─────────────────────────────
         lastPurchases = purchases;  // store for re-sorting
@@ -790,8 +1098,9 @@ form.addEventListener('submit', async (e) => {
         tableWrapper.style.display = 'block';
 
     } catch (err) {
-        console.error(err);
-        errorDiv.textContent = '⚠ ' + err.message;
+        console.error('[dca] simulation failed:', err);
+        errorDiv.textContent = '⚠ ' + userMessageFor(err,
+            'Something went wrong running the simulation. Please try again.');
     } finally {
         loadingBar.classList.remove('show');
         submitBtn.disabled = false;
@@ -812,13 +1121,13 @@ function renderHistoryTable(data) {
         const cls = p.profit >= 0 ? 'positive' : 'negative';
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${p.n}</td>
-            <td>${p.date}</td>
-            <td>$${fmtUSD(p.price)}</td>
-            <td>${fmtBTC(p.btcBought)}</td>
-            <td>${fmtBTC(p.totalBtc)}</td>
-            <td>$${fmtUSD(p.totalInvested)}</td>
-            <td>$${fmtUSD(p.portfolioValue)}</td>
+            <td class="num">${p.n}</td>
+            <td class="num">${p.date}</td>
+            <td class="num">$${fmtUSD(p.price)}</td>
+            <td class="num">${fmtBTC(p.btcBought)}</td>
+            <td class="num">${fmtBTC(p.totalBtc)}</td>
+            <td class="num">$${fmtUSD(p.totalInvested)}</td>
+            <td class="num">$${fmtUSD(p.portfolioValue)}</td>
             <td class="${cls}">$${fmtUSD(p.profit)}</td>
         `;
         tableBody.appendChild(row);
