@@ -6,24 +6,26 @@ Dollar Cost Averaging (DCA) is an investment strategy where an investor divides 
 
 ## Live Tool
 
-**[₿itcoin DCA Calculator](https://dca-analysis.netlify.app/)** — a browser-based simulator where you set a start date, investment frequency, and dollar amount, then instantly see your total return, portfolio growth chart, and full purchase history.
+**[₿itcoin DCA Calculator](https://dca-btc-with-me.netlify.app/)** — a browser-based simulator where you set a start date, investment frequency, and dollar amount, then instantly see your total return, portfolio growth chart, and full purchase history.
 
 ## Data Source & Workflow
 
-Historical Bitcoin price data is sourced from the **[Kraken OHLC API](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data)** (XBTUSD daily closes). Kraken's public API requires no API key and provides reliable data back to 2013.
+Historical Bitcoin price data comes from the **[mczielinski/bitcoin-historical-data](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data)** dataset on Kaggle — minute-level Bitstamp BTC/USD bars, aggregated here down to a single closing price per UTC day. The current build covers **2012-01-01 to today** (5,300+ daily closes, no gaps longer than one day).
+
+Kaggle downloads require authentication, so the pipeline depends on two repository secrets — `KAGGLE_USERNAME` and `KAGGLE_KEY`. Generate them from your Kaggle account under *Settings → API → Create New Token*, then add them under *Settings → Secrets and variables → Actions* in this repo.
 
 **Automated Daily Pipeline:**
 
 1. **GitHub Actions** runs a scheduled job every day at 08:00 UTC (`.github/workflows/update-btc-data.yml`)
-2. A **Python script** (`scripts/fetch_btc_prices.py`) fetches the full daily price history from Kraken, paginating in 720-candle chunks
+2. A **Python script** (`scripts/fetch_btc_prices.py`) downloads the dataset with the `kaggle` CLI and streams the minute-level CSV, keeping the last valid close for each UTC day
 3. The output is written to `data/btc-prices.json` — a static file committed to the repo
 4. **Netlify** detects the push and auto-deploys the updated site
 
 This means:
 - **No client-side API calls** — the price data is pre-baked and served from the CDN
-- **No API keys or secrets** — Kraken's public endpoint is completely free
+- **No credentials in the browser** — the Kaggle secrets are only ever read by the GitHub Actions runner
 - **No CORS or rate-limit issues** — the browser only fetches a local static file
-- **No manual maintenance** — data stays current automatically
+- **One upstream dependency** — freshness relies on the Kaggle dataset continuing to be updated. If it stalls, the workflow commits nothing and the site keeps serving the last good file, and the page's status chip turns amber once the data is more than three days old
 
 ## Project Structure
 
@@ -32,7 +34,7 @@ This means:
 ├── data/
 │   └── btc-prices.json                     # Auto-generated daily price data
 ├── scripts/
-│   └── fetch_btc_prices.py                 # Kraken API fetch script
+│   └── fetch_btc_prices.py                 # Kaggle download → daily closes
 └── .github/
     └── workflows/
         └── update-btc-data.yml             # Daily cron job
@@ -41,7 +43,8 @@ This means:
 ## DCA Simulation
 
 The calculator supports:
-- **Start date**: Any date from January 2013 to today (defaults to 1 year ago)
+- **Start date**: Any date from 28 April 2013 to today (defaults to 1 year ago). The dataset reaches
+  further back than this — the earlier floor is a deliberate legacy cutoff, see *Data Source* above
 - **Frequency**: Weekly, bi-weekly, or monthly
 - **Amount**: Any USD amount per purchase (defaults to $100)
 
@@ -57,7 +60,7 @@ Results are displayed as a summary table, an interactive chart (with ROI % on ho
 
 ## Key Features
 
-- **Always-current data** via automated GitHub Actions + Kraken pipeline
+- **Always-current data** via automated GitHub Actions + Kaggle pipeline
 - **localStorage caching** with 24-hour TTL for instant repeat visits
 - **Graceful fallbacks** — stale cache used if the static file is unavailable
 - **Sortable history table** — click #, Date, BTC Bought, or Profit/Loss headers
