@@ -1,7 +1,14 @@
 [build]
   publish = "."
 
+# Both price files are rebuilt by scheduled Actions and must never be served
+# stale from the CDN after a deploy.
 [[headers]]
   for = "/data/btc-prices.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/data/sp500-prices.json"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
