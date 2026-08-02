@@ -396,7 +396,13 @@
 
         tbody tr:hover { background: var(--bg-raised); }
 
-        /* secondary detail inside a metric label (th/td are nowrap, so keep it short) */
+        /* Summary labels are prose, not figures. `th, td` are nowrap for the history
+           table's numeric alignment, but applying that here lets a long label push
+           the value column off a phone screen — so this table wraps instead. */
+        .summary td:first-child { white-space: normal; }
+        .summary .sub { display: block; margin-top: 2px; }
+
+        /* secondary detail inside a metric label */
         .sub {
             font-family: var(--font-mono);
             font-size: 10.5px;
@@ -914,6 +920,7 @@ form.addEventListener('submit', async (e) => {
     resultsDiv.innerHTML        = '';
     chartPanel.style.display    = 'none';
     tableWrapper.style.display  = 'none';
+    resetSortState();   // new run renders chronologically — drop any stale sort marker
     loadingBar.classList.add('show');
     submitBtn.disabled = true;
 
@@ -1003,12 +1010,12 @@ form.addEventListener('submit', async (e) => {
         // ── Summary table ───────────────────────────────────────────────────
         resultsDiv.innerHTML = `
             <div class="table-wrapper">
-            <table>
+            <table class="summary">
                 <thead><tr><th>Metric</th><th>Value</th></tr></thead>
                 <tbody>
                     <tr><td>Duration</td>
                         <td class="val">${duration}</td></tr>
-                    <tr><td>Total Invested <span class="sub">${purchases.length} purchases</span></td>
+                    <tr><td>Total Invested <span class="sub">${purchases.length} purchase${purchases.length === 1 ? '' : 's'}</span></td>
                         <td class="val">${fmtUSD(totalInvested)}</td></tr>
                     <tr><td>Total BTC Accumulated</td>
                         <td class="val">${fmtBTC(totalBtc)} BTC</td></tr>
@@ -1184,6 +1191,25 @@ function renderHistoryTable(data) {
     }
 }
 
+/** Drop every header's sort marker and aria-sort. Called both when re-sorting and
+ *  when a new simulation renders — otherwise a header keeps claiming (to sighted
+ *  users via the arrow, and to screen readers via aria-sort) an order the freshly
+ *  rendered chronological table does not have. */
+function clearSortIndicators() {
+    document.querySelectorAll('#historyTable th.sortable').forEach(h => {
+        h.classList.remove('asc', 'desc');
+        h.setAttribute('aria-sort', 'none');
+    });
+}
+
+/** Full reset — markers AND the remembered column/direction. Used when a new
+ *  simulation renders rows in chronological order. */
+function resetSortState() {
+    sortCol = null;
+    sortDir = 'asc';
+    clearSortIndicators();
+}
+
 /** Sort by a column key and re-render, keeping header state and aria-sort in step */
 function sortHistoryBy(th) {
     if (!th || !lastPurchases.length) return;
@@ -1199,10 +1225,7 @@ function sortHistoryBy(th) {
     }
 
     // Update header classes + expose the state to assistive tech
-    document.querySelectorAll('#historyTable th.sortable').forEach(h => {
-        h.classList.remove('asc', 'desc');
-        h.setAttribute('aria-sort', 'none');
-    });
+    clearSortIndicators();
     th.classList.add(sortDir);
     th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
 
@@ -1221,6 +1244,7 @@ const historyHead = document.querySelector('#historyTable thead');
 historyHead.addEventListener('click', (e) => sortHistoryBy(e.target.closest('th.sortable')));
 historyHead.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.repeat) return;        // held key would flip direction ~30x/second
     const th = e.target.closest('th.sortable');
     if (!th) return;
     e.preventDefault();          // stop Space scrolling the page
