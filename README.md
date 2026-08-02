@@ -1,53 +1,69 @@
-# Dollar Cost Averaging Model for Bitcoin Investments
+# Dollar Cost Averaging Calculator — Bitcoin & S&P 500
 
 ## Project Background
 
-Dollar Cost Averaging (DCA) is an investment strategy where an investor divides up the total amount to be invested across periodic purchases of a target asset to reduce the impact of volatility on the overall purchase. The goal of this project is to demonstrate how DCA could be applied to Bitcoin investments using historical price data. This approach allows individuals to understand the potential benefits and returns of systematically investing in Bitcoin, similar to how one might contribute to a 401(k) or retirement fund.
+Dollar Cost Averaging (DCA) is an investment strategy where an investor divides up the total amount to be invested across periodic purchases of a target asset, to reduce the impact of volatility on the overall purchase. This project replays that strategy against real historical prices for two very different assets — **Bitcoin**, and the **S&P 500** in the style of a 401(k) contribution — so the same mechanic can be compared across a highly volatile asset and a broad equity index.
 
 ## Live Tool
 
-**[₿itcoin DCA Calculator](https://dca-btc-with-me.netlify.app/)** — a browser-based simulator where you set a start date, investment frequency, and dollar amount, then instantly see your total return, portfolio growth chart, and full purchase history.
+**[DCA Calculator](https://dca-btc-with-me.netlify.app/)** — a browser-based simulator. Pick an asset, set a start date, contribution frequency and dollar amount, and see your total return, portfolio growth chart, and full purchase history.
 
-## Data Source & Workflow
+- Bitcoin: <https://dca-btc-with-me.netlify.app/>
+- S&P 500: <https://dca-btc-with-me.netlify.app/?asset=sp500>
 
-Historical Bitcoin price data comes from the **[mczielinski/bitcoin-historical-data](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data)** dataset on Kaggle — minute-level Bitstamp BTC/USD bars, aggregated here down to a single closing price per UTC day. The current build covers **2012-01-01 to today** (5,300+ daily closes, no gaps longer than one day).
+The S&P 500 view adds an **employer match** field, mirroring how a 401(k) actually accrues.
 
-Kaggle downloads require authentication, so the pipeline depends on two repository secrets — `KAGGLE_USERNAME` and `KAGGLE_KEY`. Generate them from your Kaggle account under *Settings → API → Create New Token*, then add them under *Settings → Secrets and variables → Actions* in this repo.
+> Previously two separate projects. `project-401k` was merged into this repo (history included) so both assets share one engine instead of two near-identical forks.
 
-**Automated Daily Pipeline:**
+## Data Sources & Workflow
 
-1. **GitHub Actions** runs a scheduled job every day at 08:00 UTC (`.github/workflows/update-btc-data.yml`)
-2. A **Python script** (`scripts/fetch_btc_prices.py`) downloads the dataset with the `kaggle` CLI and streams the minute-level CSV, keeping the last valid close for each UTC day
-3. The output is written to `data/btc-prices.json` — a static file committed to the repo
-4. **Netlify** detects the push and auto-deploys the updated site
+Both assets are driven by pre-baked static JSON committed to this repo, with an identical schema, so the simulation engine is asset-agnostic.
 
-This means:
-- **No client-side API calls** — the price data is pre-baked and served from the CDN
-- **No credentials in the browser** — the Kaggle secrets are only ever read by the GitHub Actions runner
+| | Bitcoin | S&P 500 |
+|---|---|---|
+| Source | [Kaggle `mczielinski`](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data) — minute-level Bitstamp, aggregated to daily closes | [Yahoo Finance `^GSPC`](https://finance.yahoo.com/quote/%5EGSPC/) via `yfinance` |
+| Coverage | 2012-01-01 → today (5,300+ closes) | 1927-12-30 → today (24,700+ closes) |
+| Schedule | Daily, 08:00 UTC | Weekdays, 21:00 UTC (after US close) |
+| Credentials | **Requires `KAGGLE_USERNAME` + `KAGGLE_KEY`** | None |
+| Script | `scripts/fetch_btc_prices.py` | `scripts/fetch_sp500_prices.py` |
+| Output | `data/btc-prices.json` | `data/sp500-prices.json` |
+
+Kaggle downloads require authentication, so add `KAGGLE_USERNAME` and `KAGGLE_KEY` under *Settings → Secrets and variables → Actions*. Generate them from your Kaggle account under *Settings → API → Create New Token*. **Expired Kaggle credentials are the most likely cause of stale Bitcoin data** — the job fails, commits nothing, and the site keeps serving the last good file.
+
+Each scheduled Action writes its JSON, commits it, and Netlify auto-deploys. This means:
+
+- **No client-side API calls** — price data is pre-baked and served from the CDN
+- **No credentials in the browser** — secrets are only ever read by the Actions runner
 - **No CORS or rate-limit issues** — the browser only fetches a local static file
-- **One upstream dependency** — freshness relies on the Kaggle dataset continuing to be updated. If it stalls, the workflow commits nothing and the site keeps serving the last good file, and the page's status chip turns amber once the data is more than three days old
+- **Upstream dependencies** — the Bitcoin dataset is volunteer-maintained on Kaggle. If either upstream stalls, the workflow commits nothing and the header chip turns amber once data is more than three days old
 
 ## Project Structure
 
 ```
-├── index.html                              # DCA calculator (single-page app)
-├── netlify.toml                            # publish root + no-cache header for the data file
+├── index.html                              # both calculators (single-page app)
+├── netlify.toml                            # publish root + no-cache headers for both data files
 ├── data/
-│   └── btc-prices.json                     # Auto-generated daily price data
+│   ├── btc-prices.json                     # auto-generated, daily
+│   └── sp500-prices.json                   # auto-generated, weekdays
 ├── scripts/
-│   └── fetch_btc_prices.py                 # Kaggle download → daily closes
+│   ├── fetch_btc_prices.py                 # Kaggle download → daily closes
+│   └── fetch_sp500_prices.py               # yfinance ^GSPC → daily closes
 └── .github/
     └── workflows/
-        └── update-btc-data.yml             # Daily cron job
+        ├── update-btc-data.yml             # daily cron
+        └── update-sp500-data.yml           # weekday cron
 ```
 
+Adding a third asset is a config entry in the `ASSETS` object in `index.html` plus a
+fetch script emitting the same schema — the simulation itself needs no changes.
+
 `netlify.toml` is load-bearing twice: `publish = "."` is what makes the page's
-absolute `/data/btc-prices.json` request resolve, and the `must-revalidate`
-header on that path is what stops the CDN serving yesterday's prices.
+absolute `/data/*.json` requests resolve, and the `must-revalidate` headers on
+those paths are what stop the CDN serving yesterday's prices.
 
 ## Running it locally
 
-The page fetches `/data/btc-prices.json` by **absolute path**, and browsers block
+The page fetches `/data/*.json` by **absolute path**, and browsers block
 `fetch()` on `file://` outright — so opening `index.html` by double-clicking it
 will always fail with the "no price data" error. Serve the directory instead:
 
@@ -57,20 +73,23 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000>. Any static server works; it just has to serve
 the repo root so `/data/…` resolves. No build step, no dependencies, no API keys
-— `data/btc-prices.json` is committed, so the calculator works offline once served.
+— both price files are committed, so the calculator works offline once served.
 
-Rebuilding the price data is only needed if you want fresher numbers than the
-committed file, and that part *does* need Kaggle credentials:
+Rebuilding price data is only needed for fresher numbers than the committed files.
+The S&P script needs no credentials; the Bitcoin one does:
 
 ```bash
-pip install kaggle
-KAGGLE_USERNAME=you KAGGLE_KEY=xxxx python3 scripts/fetch_btc_prices.py
+pip install yfinance && python3 scripts/fetch_sp500_prices.py
+```
+
+```bash
+pip install kaggle && KAGGLE_USERNAME=you KAGGLE_KEY=xxxx python3 scripts/fetch_btc_prices.py
 ```
 
 ### Data file format
 
-`data/btc-prices.json` is a standalone artifact — ~14 years of daily closes in
-about 175 KB, with no gaps longer than a day — and is reusable on its own:
+Both files share one schema, which is what lets a single engine drive both assets.
+Each is a standalone, reusable artifact (BTC ~175 KB, S&P ~783 KB):
 
 ```jsonc
 {
@@ -84,18 +103,21 @@ about 175 KB, with no gaps longer than a day — and is reusable on its own:
 ## DCA Simulation
 
 The calculator supports:
-- **Start date**: Any date from 28 April 2013 to today (defaults to 1 year ago). The dataset reaches
-  further back than this — the earlier floor is a deliberate legacy cutoff, see *Data Source* above
-- **Frequency**: Weekly, bi-weekly, or monthly
+- **Asset**: Bitcoin or S&P 500, switchable in the header and linkable via `?asset=sp500`
+- **Start date**: Bitcoin from 28 April 2013, S&P 500 from 3 January 1928 (both default to 1 year ago).
+  The Bitcoin dataset reaches back to 2012 — that earlier floor is a deliberate legacy cutoff
+- **Frequency**: Weekly, bi-weekly, or monthly (S&P 500 defaults to bi-weekly, matching most US payroll cycles)
 - **Amount**: Any USD amount per purchase (defaults to $100)
+- **Employer match** (S&P 500 only): an additional per-purchase amount, reported separately in the summary
 
 For each purchase date, the simulator binary-searches for the most recent daily close **at or before** that date — never a later one, so the model can't look ahead — and calculates:
-- Total invested
-- Total BTC accumulated
-- Average cost per BTC
+- Total invested (split into your contributions vs employer match, where applicable)
+- Total units accumulated — BTC, or fractional index shares
+- Average cost per unit
 - Current portfolio value
 - Total profit/loss
-- Return on investment (%)
+- Return on investment (%) — cumulative over the whole period
+- Annualised return (XIRR) — money-weighted, shown once a run spans at least a year
 
 Results are displayed as a summary table, an interactive chart (with ROI % on hover), and a full purchase history table with sortable columns.
 
@@ -104,15 +126,17 @@ Results are displayed as a summary table, an interactive chart (with ROI % on ho
 These are stated on the page too, under *How this works*, but they matter to anyone reading the numbers:
 
 - **"Monthly" means every 30 days**, not the same calendar date — roughly 12.2 purchases a year, with the date drifting earlier over time. Weekly is 7 days, bi-weekly 14.
-- **No fees, spreads, or taxes.** A platform charging ~1% per buy leaves ~1% less BTC every time, so every figure the tool reports is an optimistic upper bound. Nothing is ever sold, so profit is unrealised.
+- **No fees, spreads, or taxes.** A platform charging ~1% per buy leaves ~1% less of the asset every time, so every figure the tool reports is an optimistic upper bound. Nothing is ever sold, so profit is unrealised.
 - **Daily closes only** — intraday highs and lows are ignored.
-- **Single venue.** Prices are Bitstamp BTC/USD, not a cross-exchange index; other venues will differ.
+- **Bitcoin prices are single-venue** (Bitstamp), not a cross-exchange index; other venues will differ. S&P 500 figures are index levels, treated as fractional units of an index fund — real funds carry an expense ratio and may not track exactly.
+- **Annualised return is XIRR**, solved by Newton's method with a bisection fallback. It is money-weighted, so it accounts for *when* each contribution went in. The naive `(value / invested)^(1/years)` shortcut credits every dollar with the full elapsed period and materially understates a contribution stream — on a 26-year S&P run it reports 5.76%/yr against a true 9.81%/yr.
 - **Purchases run through today**, so an earlier start date also means more total dollars invested. Compare runs on ROI rather than absolute profit.
 - **Portfolio Value** prices the whole stack at the most recent daily close. In the history table, *Value on Date* prices it as of that row's date instead — which is why the last row and the summary differ.
 
 ## Key Features
 
-- **Always-current data** via automated GitHub Actions + Kaggle pipeline
+- **Two assets, one engine** — switch in the header, or deep-link with `?asset=sp500`
+- **Always-current data** via automated GitHub Actions pipelines for both assets
 - **localStorage caching**, keyed per day, for instant repeat visits
 - **Sortable history table** — every column sorts, by click or keyboard
 - **ROI tracking on chart hover** — shows return percentage at any point in time

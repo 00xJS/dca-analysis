@@ -188,6 +188,43 @@
         .how-body li:last-child { margin-bottom: 0; }
         .how-body strong { color: var(--text); font-weight: 600; }
 
+        /* ── Asset switch ── */
+        .asset-switch {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin: 12px auto 0;
+            padding: 4px;
+            width: fit-content;
+            max-width: 100%;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-pill);
+        }
+        .asset-btn {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--faint);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-pill);
+            padding: 7px 16px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: color 0.2s ease, background 0.2s ease;
+        }
+        .asset-btn:hover:not(.is-active) { color: var(--text); background: var(--card); }
+        .asset-btn.is-active {
+            color: var(--btn-ink);
+            background: var(--accent);
+        }
+        /* the global button:hover lift would make the active pill jitter */
+        .asset-btn:hover:not(:disabled) { transform: none; }
+        .asset-btn.is-active:hover { background: var(--accent); }
+
         /* ── Status chip ── */
         .chip-row {
             display: flex;
@@ -501,24 +538,30 @@
 
     <a class="kicker" href="https://observation-deck.netlify.app/">Observation Deck / DCA Analysis</a>
 
-    <h1><span class="btc-mark">&#8383;</span>itcoin DCA Calculator</h1>
+    <!-- Title, chips and copy below are rewritten by applyAsset() -->
+    <h1 id="pageTitle"><span class="btc-mark">&#8383;</span>itcoin DCA Calculator</h1>
 
-    <!-- Live status chip: current BTC price + data freshness -->
+    <div class="asset-switch" role="group" aria-label="Choose asset">
+        <button type="button" class="asset-btn is-active" data-asset="btc"   aria-pressed="true">Bitcoin</button>
+        <button type="button" class="asset-btn"           data-asset="sp500" aria-pressed="false">S&amp;P 500</button>
+    </div>
+
+    <!-- Live status chip: latest close + data freshness -->
     <div class="chip-row">
         <div id="dataStatus" class="chip loading" role="status">
             <span class="spin" aria-hidden="true"></span>
             <span class="dot" aria-hidden="true"></span>
-            <span id="statusText">Loading Bitcoin price data&hellip;</span>
+            <span id="statusText">Loading price data&hellip;</span>
         </div>
         <div class="chip chip--info">
-            <span id="coverageText">Bitstamp daily closes</span>
+            <span id="coverageText">&nbsp;</span>
         </div>
     </div>
 
     <p class="lede">
         <strong>Dollar-cost averaging</strong> — a fixed dollar amount, bought on a fixed schedule —
-        replayed against real Bitcoin closing prices. A backtest, not a forecast.<br>
-        Set your <strong>Start Date</strong>, <strong>Frequency</strong>, and <strong>Amount ($)</strong>, then click <strong>Run Simulation</strong>.
+        replayed against <span id="ledeAsset">real Bitcoin closing prices</span>. A backtest, not a forecast.<br>
+        Set your <strong>Start Date</strong>, <strong>Frequency</strong><span id="ledeFields">, and <strong>Amount ($)</strong></span>, then click <strong>Run Simulation</strong>.
     </p>
 
     <details class="how">
@@ -534,19 +577,23 @@
                     recent close on or before the date, never a later one. Intraday highs and lows are
                     ignored.</li>
                 <li><strong>No fees, spreads, or taxes.</strong> A platform charging ~1% a buy would
-                    leave you ~1% less Bitcoin every time, so every figure here is an optimistic upper
-                    bound. Nothing is ever sold — profit is unrealised.</li>
+                    leave you ~1% less <span class="asset-noun">Bitcoin</span> every time, so every
+                    figure here is an optimistic upper bound. Nothing is ever sold — profit is
+                    unrealised.</li>
                 <li>Buying continues <strong>through today</strong>, so an earlier start date also means
                     more total dollars invested. Compare runs on ROI, not on profit.</li>
             </ul>
 
             <h3>Reading the results</h3>
             <ul>
-                <li><strong>Average Cost per BTC</strong> lands below the average price you actually
-                    paid — a fixed dollar amount buys more Bitcoin when the price is low. That gap is
+                <li><strong>Average Cost per <span class="asset-unit">BTC</span></strong> lands below
+                    the average price you actually paid — a fixed dollar amount buys more
+                    <span class="asset-noun">Bitcoin</span> when the price is low. That gap is
                     dollar-cost averaging doing its job.</li>
-                <li><strong>Return on Investment</strong> is the total across the whole duration, not a
-                    yearly rate. Don&rsquo;t divide it by the number of years.</li>
+                <li><strong>Return on Investment</strong> is the total across the whole duration.
+                    <strong>Annualised Return</strong> is the money-weighted rate (XIRR) — it accounts
+                    for when each contribution actually went in, so it is the figure to compare runs
+                    of different lengths on. Don&rsquo;t divide ROI by the number of years.</li>
                 <li><strong>Portfolio Value</strong> prices your whole stack at the most recent daily
                     close. In the history table, <strong>Value on Date</strong> prices it at that
                     row&rsquo;s date instead — which is why the last row and the summary differ.</li>
@@ -572,8 +619,13 @@
                 </select>
             </div>
             <div class="field-group">
-                <label for="amount">Amount per purchase (USD)</label>
+                <label for="amount" id="amountLabel">Amount per purchase (USD)</label>
                 <input type="number" id="amount" required min="1" step="0.01" value="100">
+            </div>
+            <!-- 401k-style employer match; shown only for assets that opt in -->
+            <div class="field-group" id="employerGroup" hidden>
+                <label for="employerAmount">Employer match (USD)</label>
+                <input type="number" id="employerAmount" min="0" step="0.01" value="0" placeholder="0">
             </div>
         </div>
         <div class="form-actions">
@@ -600,9 +652,9 @@
                 <tr>
                     <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="n">#</th>
                     <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="date">Date</th>
-                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="price">BTC Price</th>
-                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="btcBought">BTC Bought</th>
-                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="totalBtc">Total BTC</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="price"><span class="asset-price-label">BTC</span> Price</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="unitsBought"><span class="asset-unit-h">BTC</span> Bought</th>
+                    <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="totalUnits">Total <span class="asset-unit-h">BTC</span></th>
                     <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="totalInvested">Total Invested</th>
                     <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="portfolioValue">Value on Date</th>
                     <th class="sortable" scope="col" tabindex="0" aria-sort="none" data-col="profit">Profit / Loss</th>
@@ -618,14 +670,11 @@
             JS &nbsp;&middot;&nbsp;
             <a href="https://github.com/00xJS/dca-analysis">GitHub</a>
         </p>
-        <p>
-            Price data: <a href="https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data" target="_blank" rel="noopener">Kaggle</a>
-            (daily closes &bull; updated daily via GitHub Actions)
-        </p>
+        <p id="sourceCredit"></p>
         <div class="disclaimer">
             <strong>Not financial advice.</strong> This tool is for educational and informational purposes only.
-            Past performance does not guarantee future results. Bitcoin is a highly volatile asset —
-            always conduct your own research before making any investment decisions.
+            Past performance does not guarantee future results. <span id="assetRisk">Bitcoin is a highly
+            volatile asset</span> — always conduct your own research before making any investment decisions.
         </div>
     </footer>
 
@@ -635,8 +684,67 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
-const CACHE_KEY  = `btc_dca_v5_${new Date().toISOString().split('T')[0]}`;  // date-scoped → busts cache each new day
 const CACHE_TTL  = 24 * 60 * 60 * 1000;  // 24 hours in ms
+
+/**
+ * Everything that differs between assets. The simulation itself is identical —
+ * both price files share the schema {generated, source, count, prices[{ts, price}]}
+ * with ts in UNIX seconds — so adding an asset is a config entry, not new logic.
+ */
+const ASSETS = {
+    btc: {
+        name:        'Bitcoin',
+        // Unit vocabulary. "per BTC"/"per share" needs the singular, "0.42 shares"
+        // the plural, and a column header wants it capitalised — one token can't
+        // serve all three without producing "shares Price" or "per shares".
+        unitSingular: 'BTC',
+        unitPlural:   'BTC',
+        unitHeader:   'BTC',
+        priceLabel:   'BTC',             // the "___ Price" column
+        decimals:    8,                  // BTC is quoted to 8dp, index units to 6
+        title:       '<span class="btc-mark">&#8383;</span>itcoin DCA Calculator',
+        docTitle:    '₿itcoin DCA Calculator',
+        mark:        '<span class="btc-mark">&#8383;</span> ',   // chip prefix
+        dataUrl:     '/data/btc-prices.json',
+        cachePrefix: 'btc_dca_v5',
+        minDate:     '2013-04-28',       // legacy floor; data starts 2012-01-01
+        defaultFreq: '7',
+        lede:        'real Bitcoin closing prices',
+        coverage:    'Bitstamp daily closes',
+        risk:        'Bitcoin is a highly volatile asset',
+        employer:    false,
+        seriesVar:   '--accent',
+        credit:      'Price data: <a href="https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data" target="_blank" rel="noopener">Kaggle</a> '
+                   + '(Bitstamp daily closes &bull; rebuilt daily via GitHub Actions)',
+    },
+    sp500: {
+        name:        'S&P 500',
+        unitSingular: 'share',
+        unitPlural:   'shares',
+        unitHeader:   'Shares',
+        priceLabel:   'S&amp;P 500',
+        decimals:    6,
+        title:       'S&amp;P 500 DCA Calculator',
+        docTitle:    'S&P 500 DCA Calculator',
+        mark:        '',
+        dataUrl:     '/data/sp500-prices.json',
+        cachePrefix: 'sp500_dca_v1',
+        minDate:     '1928-01-03',
+        defaultFreq: '14',               // bi-weekly matches most US payroll cycles
+        lede:        'real S&amp;P 500 closing levels',
+        coverage:    '^GSPC daily closes',
+        risk:        'Equity markets can fall as well as rise',
+        employer:    true,               // 401k-style match
+        seriesVar:   '--series-blue',
+        credit:      'Price data: <a href="https://finance.yahoo.com/quote/%5EGSPC/" target="_blank" rel="noopener">Yahoo Finance (^GSPC)</a> '
+                   + '(daily closes &bull; rebuilt each weekday via GitHub Actions)',
+    },
+};
+
+/** Currently selected asset key; kept in sync with ?asset= in the URL. */
+let assetKey = 'btc';
+const asset  = () => ASSETS[assetKey];
+const cacheKey = () => `${asset().cachePrefix}_${new Date().toISOString().split('T')[0]}`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOM references
@@ -654,8 +762,8 @@ const statusTextEl  = document.getElementById('statusText');
 const loadingBar    = document.getElementById('loadingBar');
 let   dcaChart;
 
-// In-memory cache so re-running simulations doesn't re-parse localStorage
-let sessionData = null;
+// In-memory cache, keyed by asset, so switching back and forth doesn't refetch
+const sessionData = {};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // deck-chart-theme — call once before creating charts. Dark is the only theme,
@@ -696,9 +804,55 @@ function fmtUSD(n) {
     });
 }
 
-/** Format a number as 8-decimal BTC */
-function fmtBTC(n) {
-    return Number(n).toFixed(8);
+/** Format an asset-unit quantity — BTC to 8dp, index units to 6dp */
+function fmtUnits(n) {
+    return Number(n).toFixed(asset().decimals);
+}
+
+/**
+ * Money-weighted annual return (XIRR) over dated cash flows.
+ *
+ * A DCA plan is a stream of contributions at different times, so
+ * (value / invested)^(1/years) — the shortcut the standalone 401k tool used —
+ * understates the return: it credits every dollar with the full elapsed period
+ * even though later contributions compounded for only part of it. XIRR solves
+ * for the rate that actually discounts these flows to zero.
+ *
+ * flows: [{ when: Date, amount: number }]  contributions negative, final value positive.
+ * Returns a percentage, or null if it cannot converge (which is a real possibility
+ * for deeply negative portfolios — the caller must handle null).
+ */
+function xirr(flows) {
+    if (flows.length < 2) return null;
+    const t0   = flows[0].when.getTime();
+    const yrs  = (f) => (f.when.getTime() - t0) / (365.25 * 24 * 3600 * 1000);
+    const npv  = (r) => flows.reduce((s, f) => s + f.amount / Math.pow(1 + r, yrs(f)), 0);
+
+    // Newton–Raphson with a numeric derivative, then bisection as a fallback.
+    let rate = 0.1;
+    for (let i = 0; i < 100; i++) {
+        const f0 = npv(rate);
+        if (!isFinite(f0)) break;
+        if (Math.abs(f0) < 1e-7) return rate * 100;
+        const d = (npv(rate + 1e-6) - f0) / 1e-6;
+        if (!isFinite(d) || Math.abs(d) < 1e-12) break;
+        const next = rate - f0 / d;
+        if (!isFinite(next) || next <= -0.999999) break;
+        if (Math.abs(next - rate) < 1e-9) return next * 100;
+        rate = next;
+    }
+
+    let lo = -0.9999, hi = 100;
+    let flo = npv(lo), fhi = npv(hi);
+    if (!isFinite(flo) || !isFinite(fhi) || flo * fhi > 0) return null;
+    for (let i = 0; i < 300; i++) {
+        const mid = (lo + hi) / 2;
+        const fm  = npv(mid);
+        if (!isFinite(fm)) return null;
+        if (Math.abs(fm) < 1e-9) return mid * 100;
+        if (flo * fm < 0) { hi = mid; fhi = fm; } else { lo = mid; flo = fm; }
+    }
+    return ((lo + hi) / 2) * 100;
 }
 
 /** Human-readable "time ago" string from a millisecond age */
@@ -785,42 +939,44 @@ async function fetchWithRetry(url, retries = 3, baseDelay = 1500, timeout = 1200
 /**
  * Returns: { prices: [{ts, price}], latestPrice, fetchedAt, generatedAt, stale? }
  *
- * Strategy:
+ * Strategy (per asset — each has its own cache key and file):
  *  1. In-memory session cache        → instant
  *  2. localStorage (< 24 h)          → fast (CDN-busted on each daily deploy)
- *  3. /data/btc-prices.json          → static file, served from Netlify CDN,
- *                                       updated daily by GitHub Actions + Kaggle API
+ *  3. the asset's /data/*.json       → static file, served from Netlify CDN,
+ *                                       rebuilt by a scheduled GitHub Action
  *  4. Stale localStorage              → fallback with warning
  *
  * No API key. No external fetch from the browser. No CORS surface.
  */
 async function loadPriceData() {
+    const a   = asset();
+    const key = cacheKey();
+
     // 1. In-memory
-    if (sessionData) return sessionData;
+    if (sessionData[assetKey]) return sessionData[assetKey];
 
     // 2. localStorage
     let cached = null;
     try {
-        const raw = localStorage.getItem(CACHE_KEY);
+        const raw = localStorage.getItem(key);
         if (raw) cached = JSON.parse(raw);
     } catch (_) { /* corrupted storage – treat as missing */ }
 
     if (cached && (Date.now() - cached.fetchedAt) < CACHE_TTL) {
-        sessionData = cached;
+        sessionData[assetKey] = cached;
         return cached;
     }
 
-    // 3. Fetch the pre-baked static JSON — generated server-side by GitHub
-    //    Actions every day at 08:00 UTC using the Kaggle dataset.
-    //    The file is committed to the repo and served straight from the CDN.
+    // 3. Fetch the pre-baked static JSON, committed to the repo and served
+    //    straight from the CDN.
     try {
-        const res  = await fetchWithRetry(`/data/btc-prices.json?d=${new Date().toISOString().split('T')[0]}`);
+        const res  = await fetchWithRetry(`${a.dataUrl}?d=${new Date().toISOString().split('T')[0]}`);
         const json = await res.json();
 
         if (!json.prices?.length) {
             throw userError(
-                'No Bitcoin price data is available right now.',
-                'data/btc-prices.json parsed but contained no prices — the daily update job ' +
+                `No ${a.name} price data is available right now.`,
+                `${a.dataUrl} parsed but contained no prices — the scheduled update job ` +
                 'may not have run; trigger it from the Actions tab and redeploy.'
             );
         }
@@ -833,54 +989,123 @@ async function loadPriceData() {
         };
 
         // Persist — gracefully handle storage quota errors.
-        // The key is date-scoped, so drop yesterday's entries first; without this
-        // they accrete ~175KB per visit-day until the quota is hit.
+        // Keys are date-scoped, so drop this asset's older entries first; without
+        // that they accrete a full price file per visit-day until the quota is hit.
+        // Only this asset's prefix is swept, so the other asset keeps its cache.
         try {
             for (let i = localStorage.length - 1; i >= 0; i--) {
                 const k = localStorage.key(i);
-                if (k?.startsWith('btc_dca_v5_') && k !== CACHE_KEY) localStorage.removeItem(k);
+                if (k?.startsWith(`${a.cachePrefix}_`) && k !== key) localStorage.removeItem(k);
             }
-            localStorage.setItem(CACHE_KEY, JSON.stringify(result));
+            localStorage.setItem(key, JSON.stringify(result));
         } catch (storageErr) {
             console.warn('localStorage write failed (quota?), cache skipped.', storageErr);
         }
 
-        sessionData = result;
+        sessionData[assetKey] = result;
         return result;
 
     } catch (apiErr) {
         // 4. Fall back to stale cache rather than failing completely
         if (cached) {
             console.warn(`Static file fetch failed (${apiErr.message}); falling back to cached data.`);
-            sessionData = { ...cached, stale: true };
-            return sessionData;
+            sessionData[assetKey] = { ...cached, stale: true };
+            return sessionData[assetKey];
         }
         throw apiErr; // nothing cached — surface the error
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Asset switching
+// ─────────────────────────────────────────────────────────────────────────────
+/** Rewrite every asset-dependent label, then reload that asset's price data. */
+async function applyAsset(key, { pushUrl = true } = {}) {
+    if (!ASSETS[key]) key = 'btc';
+    assetKey = key;
+    const a  = asset();
+
+    document.title = a.docTitle;
+    document.getElementById('pageTitle').innerHTML   = a.title;
+    document.getElementById('ledeAsset').innerHTML   = a.lede;
+    document.getElementById('ledeFields').innerHTML  = a.employer
+        ? ', <strong>Contribution</strong> and any <strong>Employer Match</strong>'
+        : ', and <strong>Amount ($)</strong>';
+    document.getElementById('assetRisk').innerHTML   = a.risk;
+    document.getElementById('sourceCredit').innerHTML = a.credit;
+    document.querySelectorAll('.asset-unit').forEach(el => { el.textContent = a.unitSingular; });
+    document.querySelectorAll('.asset-unit-h').forEach(el => { el.textContent = a.unitHeader; });
+    document.querySelectorAll('.asset-price-label').forEach(el => { el.innerHTML = a.priceLabel; });
+    document.querySelectorAll('.asset-noun').forEach(el => { el.textContent = a.name; });
+
+    // Reflect the choice on the switch
+    document.querySelectorAll('.asset-btn').forEach(b => {
+        const on = b.dataset.asset === key;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', String(on));
+    });
+
+    // Employer match is a 401k concept — hide it (and neutralise it) elsewhere
+    const empGroup = document.getElementById('employerGroup');
+    empGroup.hidden = !a.employer;
+    if (!a.employer) document.getElementById('employerAmount').value = '0';
+    document.getElementById('amountLabel').textContent =
+        a.employer ? 'Your contribution (USD)' : 'Amount per purchase (USD)';
+
+    // Date floor and default cadence are asset-specific
+    const startInput = document.getElementById('startDate');
+    startInput.min = a.minDate;
+    if (startInput.value && startInput.value < a.minDate) startInput.value = a.minDate;
+    document.getElementById('frequency').value = a.defaultFreq;
+
+    // Clear any results belonging to the previous asset
+    errorDiv.textContent       = '';
+    resultsDiv.innerHTML       = '';
+    chartPanel.style.display   = 'none';
+    tableWrapper.style.display = 'none';
+    lastPurchases = [];
+    resetSortState();
+
+    if (pushUrl) {
+        const url = new URL(location.href);
+        if (key === 'btc') url.searchParams.delete('asset');
+        else               url.searchParams.set('asset', key);
+        history.replaceState(null, '', url);
+    }
+
+    await initPage();
+}
+
+document.querySelector('.asset-switch').addEventListener('click', (e) => {
+    const btn = e.target.closest('.asset-btn');
+    if (btn && btn.dataset.asset !== assetKey) applyAsset(btn.dataset.asset);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Page initialisation: set date defaults + pre-load price data
 // ─────────────────────────────────────────────────────────────────────────────
 async function initPage() {
     const today = todayStr();
+    const a     = asset();
 
     // Default start = 1 year ago; max = today (no future dates)
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const startInput = document.getElementById('startDate');
     startInput.max   = today;
-    startInput.value = oneYearAgo.toISOString().split('T')[0];
+    if (!startInput.value || startInput.value > today) {
+        startInput.value = oneYearAgo.toISOString().split('T')[0];
+    }
 
     // Read the earliest simulatable date off the picker itself, so the header
     // chip can never advertise a range the date input would reject.
     if (startInput.min) {
         document.getElementById('coverageText').textContent =
-            `Bitstamp daily closes back to ${startInput.min}`;
+            `${a.coverage} back to ${startInput.min}`;
     }
 
     // Pre-fetch price data so the first "Run Simulation" is instant
-    setStatus('loading', 'Loading Bitcoin price data&hellip;');
+    setStatus('loading', `Loading ${a.name} price data&hellip;`);
     try {
         const data     = await loadPriceData();
         const lastTs      = data.prices?.length
@@ -893,7 +1118,7 @@ async function initPage() {
         const genLabel    = lastTs
             ? `latest close ${new Date(lastTs * 1000).toISOString().split('T')[0]}`
             : `cached ${ageLabel(Date.now() - data.fetchedAt)}`;
-        const priceLabel  = `<span class="btc-mark">&#8383;</span> <strong>${fmtUSD(data.latestPrice)}</strong>`;
+        const priceLabel  = `${a.mark}<strong>${fmtUSD(data.latestPrice)}</strong>`;
         if (isStale) {
             setStatus('stale',
                 `${priceLabel}&ensp;&bull;&ensp;${genLabel} &mdash; may be outdated`);
@@ -903,7 +1128,7 @@ async function initPage() {
         submitBtn.disabled = false;   // keep initPage idempotent after a failed attempt
     } catch (err) {
         console.error('[dca] price data failed to load:', err);
-        setStatus('error', userMessageFor(err, 'Bitcoin price data could not be loaded.')
+        setStatus('error', userMessageFor(err, `${a.name} price data could not be loaded.`)
             + ' Refresh the page to try again.');
         submitBtn.disabled = true; // nothing to simulate without data
     }
@@ -925,14 +1150,22 @@ form.addEventListener('submit', async (e) => {
     submitBtn.disabled = true;
 
     try {
+        const a             = asset();
         const startDate     = new Date(document.getElementById('startDate').value);
         const frequencyDays = parseInt(document.getElementById('frequency').value, 10);
-        const investAmount  = parseFloat(document.getElementById('amount').value);
+        const ownAmount     = parseFloat(document.getElementById('amount').value);
+        // Employer match only applies to assets that opt in; applyAsset() zeroes
+        // the field otherwise, but guard here too so a stale value can't leak in.
+        const employerAmount = a.employer
+            ? (parseFloat(document.getElementById('employerAmount').value) || 0)
+            : 0;
+        const investAmount  = ownAmount + employerAmount;
         const endDate       = new Date(); // always "today" — no hardcoded cutoff
 
         if (isNaN(startDate.getTime())) throw userError('Please enter a valid start date.');
         if (startDate >= endDate)       throw userError('Your start date must be before today.');
-        if (investAmount < 1)           throw userError('Enter an amount of $1 or more per purchase.');
+        if (ownAmount < 1)              throw userError('Enter an amount of $1 or more per purchase.');
+        if (employerAmount < 0)         throw userError('Employer match cannot be negative.');
 
         // Retrieve cached price data (should already be loaded by initPage)
         const { prices } = await loadPriceData();
@@ -949,8 +1182,11 @@ form.addEventListener('submit', async (e) => {
         //    For each date, find the latest closing price at or before that date.
         //    prices[] is sorted ascending by ts.
         let totalInvested = 0;
-        let totalBtc      = 0;
+        let totalOwn      = 0;
+        let totalEmployer = 0;
+        let totalUnits    = 0;
         const purchases   = [];
+        const flows       = [];   // dated cash flows, for XIRR
 
         for (const date of purchaseDates) {
             const unixTs = Math.floor(date.getTime() / 1000);
@@ -964,20 +1200,23 @@ form.addEventListener('submit', async (e) => {
             }
             if (idx < 0 || prices[idx].price <= 0) continue;
 
-            const price    = prices[idx].price;
-            const btcBought = investAmount / price;
-            totalInvested  += investAmount;
-            totalBtc       += btcBought;
+            const price       = prices[idx].price;
+            const unitsBought = investAmount / price;
+            totalInvested    += investAmount;
+            totalOwn         += ownAmount;
+            totalEmployer    += employerAmount;
+            totalUnits       += unitsBought;
+            flows.push({ when: new Date(date), amount: -investAmount });
 
             purchases.push({
                 n:             purchases.length + 1,
                 date:          date.toISOString().split('T')[0],
                 price,
-                btcBought,
-                totalBtc,
+                unitsBought,
+                totalUnits,
                 totalInvested,
-                portfolioValue: price * totalBtc,
-                profit:         price * totalBtc - totalInvested,
+                portfolioValue: price * totalUnits,
+                profit:         price * totalUnits - totalInvested,
             });
         }
 
@@ -998,14 +1237,33 @@ form.addEventListener('submit', async (e) => {
             else                           { hi2 = mid - 1; }
         }
         const finalPrice = prices[finalIdx].price;
-        const finalValue = totalBtc * finalPrice;
+        const finalValue = totalUnits * finalPrice;
         const profit     = finalValue - totalInvested;
         const roi        = ((finalValue - totalInvested) / totalInvested * 100).toFixed(2);
-        const avgCost    = totalInvested / totalBtc;
+        const avgCost    = totalInvested / totalUnits;
         const duration   = calcDuration(startDate, endDate);
+
+        // Money-weighted annual return: contributions out, final value back in today.
+        const finalDateObj = new Date(prices[finalIdx].ts * 1000);
+        const annual = xirr([...flows, { when: finalDateObj, amount: finalValue }]);
 
         const pClass  = profit >= 0 ? 'positive' : 'negative';
         const roiSign = Number(roi) >= 0 ? '+' : '';
+
+        // Only meaningful once a reasonable span has elapsed — over a few weeks
+        // XIRR annualises noise into absurd figures.
+        const spanYears = (endDate - startDate) / (365.25 * 24 * 3600 * 1000);
+        const annualRow = (annual !== null && isFinite(annual) && spanYears >= 1)
+            ? `<tr><td>Annualised Return <span class="sub">money-weighted (XIRR)</span></td>
+                   <td class="val ${annual >= 0 ? 'positive' : 'negative'}">${annual >= 0 ? '+' : ''}${annual.toFixed(2)}%</td></tr>`
+            : '';
+
+        const splitRows = (a.employer && totalEmployer > 0)
+            ? `<tr><td>&nbsp;&nbsp;&nbsp;Your contributions</td>
+                   <td class="val">${fmtUSD(totalOwn)}</td></tr>
+               <tr><td>&nbsp;&nbsp;&nbsp;Employer match</td>
+                   <td class="val">${fmtUSD(totalEmployer)}</td></tr>`
+            : '';
 
         // ── Summary table ───────────────────────────────────────────────────
         resultsDiv.innerHTML = `
@@ -1017,11 +1275,12 @@ form.addEventListener('submit', async (e) => {
                         <td class="val">${duration}</td></tr>
                     <tr><td>Total Invested <span class="sub">${purchases.length} purchase${purchases.length === 1 ? '' : 's'}</span></td>
                         <td class="val">${fmtUSD(totalInvested)}</td></tr>
-                    <tr><td>Total BTC Accumulated</td>
-                        <td class="val">${fmtBTC(totalBtc)} BTC</td></tr>
-                    <tr><td>Average Cost per BTC</td>
+                    ${splitRows}
+                    <tr><td>Total ${a.unitHeader} Accumulated</td>
+                        <td class="val">${fmtUnits(totalUnits)} ${a.unitPlural}</td></tr>
+                    <tr><td>Average Cost per ${a.unitSingular}</td>
                         <td class="val">${fmtUSD(avgCost)}</td></tr>
-                    <tr><td>Current BTC Price</td>
+                    <tr><td>Latest ${a.name} Close</td>
                         <td class="val">${fmtUSD(finalPrice)}</td></tr>
                     <tr><td>Portfolio Value</td>
                         <td class="val">${fmtUSD(finalValue)}</td></tr>
@@ -1029,14 +1288,16 @@ form.addEventListener('submit', async (e) => {
                         <td class="val ${pClass}">${fmtUSD(profit)}</td></tr>
                     <tr><td>Return on Investment</td>
                         <td class="val ${pClass}">${roiSign}${roi}%</td></tr>
+                    ${annualRow}
                 </tbody>
             </table>
             </div>
             <p class="result-note">
                 One historical window, not a forecast. A short window mostly measures where
-                Bitcoin happened to be when you started &mdash; the case for DCA rests on
-                horizons measured in years. Change the Start Date and re-run to watch the
-                average cost move. Fees, spreads and taxes are not included.
+                the ${a.name === 'Bitcoin' ? 'price' : 'index'} happened to be when you started
+                &mdash; the case for DCA rests on horizons measured in years. Change the Start
+                Date and re-run to watch the average cost move. Fees, spreads and taxes are not
+                included.
             </p>`;
 
         // ── History table ────────────────────────────────────────────────────
@@ -1071,6 +1332,13 @@ form.addEventListener('submit', async (e) => {
         // try/catch rather than taking the whole run down with it.
         try {
         const t            = deckChartTheme();
+        // Each asset gets its own series colour so the two are distinguishable at
+        // a glance; --live/--down stay reserved for profit/loss semantics.
+        const cssVars      = getComputedStyle(document.documentElement);
+        const assetSeries  = cssVars.getPropertyValue(a.seriesVar).trim() || t.accent;
+        const assetFill    = assetSeries.startsWith('#')
+            ? `${assetSeries}1f`     // ~12% alpha via 8-digit hex
+            : t.fill;
 
         if (dcaChart) dcaChart.destroy();
         dcaChart = new Chart(chartCanvas, {
@@ -1091,8 +1359,8 @@ form.addEventListener('submit', async (e) => {
                     {
                         label: 'Portfolio Value ($)',
                         data: valueData,
-                        borderColor: t.accent,
-                        backgroundColor: t.fill,
+                        borderColor: assetSeries,
+                        backgroundColor: assetFill,
                         fill: true,
                         tension: 0.3,
                         pointRadius: 0,
@@ -1181,8 +1449,8 @@ function renderHistoryTable(data) {
             <td class="num">${p.n}</td>
             <td class="num">${p.date}</td>
             <td class="num">${fmtUSD(p.price)}</td>
-            <td class="num">${fmtBTC(p.btcBought)}</td>
-            <td class="num">${fmtBTC(p.totalBtc)}</td>
+            <td class="num">${fmtUnits(p.unitsBought)}</td>
+            <td class="num">${fmtUnits(p.totalUnits)}</td>
             <td class="num">${fmtUSD(p.totalInvested)}</td>
             <td class="num">${fmtUSD(p.portfolioValue)}</td>
             <td class="${cls}">${fmtUSD(p.profit)}</td>
@@ -1252,9 +1520,9 @@ historyHead.addEventListener('keydown', (e) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Boot
+// Boot — honour ?asset= so each view is linkable
 // ─────────────────────────────────────────────────────────────────────────────
-initPage();
+applyAsset(new URLSearchParams(location.search).get('asset') || 'btc', { pushUrl: false });
 </script>
 </body>
 </html>
