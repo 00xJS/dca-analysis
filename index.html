@@ -66,17 +66,16 @@
         /* ── Project-local tokens. Derived from the deck palette; the block above
               stays verbatim so it can be diffed against the deck. ── */
         :root {
-            --series-neutral: #c6c9de;   /* "Total invested" line. --muted failed the normal-vision
-                                            floor against the S&P blue (ΔE 12.3 < 15); this clears
-                                            it against both series hues (ΔE 18.9 / 22.6). */
+            --series-neutral: #c6c9de;   /* "Total invested" line: a neutral that stays clearly
+                                            distinct from the --accent value line (ΔE 18.9). */
             --live-wash:   rgba(61, 220, 132, 0.12);    /* --live @ 12% */
             --down-wash:   rgba(255, 107, 107, 0.12);   /* --down @ 12% */
             --accent-ring: rgba(255, 154, 68, 0.18);    /* focus halo */
             --shadow-sm:   0 1px 6px rgba(0, 0, 0, 0.35);
         }
 
-        /* `hidden` must beat component display rules. Without this, a
-           `display:flex` field group kept the employer match visible on Bitcoin. */
+        /* `hidden` must beat component display rules. Without this, an element
+           with its own `display` (flex, grid) stays visible when JS hides it. */
         [hidden] { display: none !important; }
 
         .visually-hidden {
@@ -156,7 +155,7 @@
 
         /* ── Masthead ── */
         /* Centred, like the deck's other instruments: title and intro, then the
-           asset switch and the data chips, one above the other */
+           data chips, one above the other */
         .masthead {
             display: flex;
             flex-direction: column;
@@ -206,6 +205,19 @@
         }
         .lede strong { color: var(--text); font-weight: 600; }
 
+        /* Legacy ?asset=sp500 links land here; point them at the S&P site */
+        .moved-note {
+            margin: 0 0 18px;
+            padding: 10px 14px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--muted);
+            background: var(--tag-bg);
+            border: 1px solid var(--border-hover);
+            border-radius: var(--radius-control);
+        }
+        .moved-note a { font-weight: 600; }
+
         /* ── "How this works" collapsible ── */
         .how {
             margin: 0;
@@ -251,41 +263,6 @@
         .how-body li { margin-bottom: 7px; }
         .how-body li:last-child { margin-bottom: 0; }
         .how-body strong { color: var(--text); font-weight: 600; }
-
-        /* ── Asset switch ── */
-        .asset-switch {
-            display: flex;
-            justify-content: center;
-            gap: 4px;
-            margin: 0;
-            padding: 4px;
-            width: fit-content;
-            max-width: 100%;
-            background: var(--bg-raised);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-pill);
-        }
-        .asset-btn {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--faint);
-            background: transparent;
-            border: none;
-            border-radius: var(--radius-pill);
-            padding: 7px 16px;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: color 0.2s ease, background 0.2s ease;
-        }
-        .asset-btn:hover:not(.is-active) { color: var(--text); background: var(--card); }
-        .asset-btn.is-active {
-            color: var(--btn-ink);
-            background: var(--accent);
-        }
-        .asset-btn.is-active:hover { background: var(--accent); }
 
         /* ── Status chip ── */
         .chip-row {
@@ -351,7 +328,7 @@
 
         /* ── Buttons ──
            There is no solid primary button any more: results are live, so there is
-           nothing to "run". The one solid-orange element per view is the active asset. */
+           nothing to "run". */
         button {
             font-family: var(--font-sans);
             font-size: 14px;
@@ -920,11 +897,6 @@
         </div>
 
         <div class="masthead-side">
-            <div class="asset-switch" role="group" aria-label="Choose asset">
-                <button type="button" class="asset-btn is-active" data-asset="btc"   aria-pressed="true">Bitcoin</button>
-                <button type="button" class="asset-btn"           data-asset="sp500" aria-pressed="false">S&amp;P 500</button>
-            </div>
-
             <!-- Live status chip: latest close + data freshness -->
             <div class="chip-row">
                 <div id="dataStatus" class="chip loading" role="status">
@@ -938,6 +910,12 @@
             </div>
         </div>
     </header>
+
+    <!-- Shown only for legacy ?asset=sp500 links (see the boot script) -->
+    <p class="moved-note" id="movedNote" hidden>
+        The S&amp;P 500 / 401(k) calculator now has its own site:
+        <a href="https://project401k.netlify.app/">project401k.netlify.app</a>
+    </p>
 
     <details class="how">
         <summary>How this works</summary>
@@ -1013,18 +991,10 @@
             </fieldset>
 
             <div class="ctl">
-                <label for="amount" id="amountLabel">Amount per purchase (USD)</label>
+                <label for="amount">Amount per purchase (USD)</label>
                 <div class="money">
                     <span aria-hidden="true">$</span>
                     <input type="number" id="amount" required min="1" step="0.01" value="100" inputmode="decimal">
-                </div>
-            </div>
-            <!-- 401k-style employer match; shown only for assets that opt in -->
-            <div class="ctl" id="employerGroup" hidden>
-                <label for="employerAmount">Employer match (USD)</label>
-                <div class="money">
-                    <span aria-hidden="true">$</span>
-                    <input type="number" id="employerAmount" min="0" step="0.01" value="0" placeholder="0" inputmode="decimal">
                 </div>
             </div>
 
@@ -1081,7 +1051,7 @@
 
         <p class="result-note">
             One historical window, not a forecast. A short window mostly measures where the
-            <span id="noteMover">price</span> happened to be when you started &mdash; the case for DCA rests on
+            price happened to be when you started &mdash; the case for DCA rests on
             horizons measured in years. Drag the start date to watch the average cost move.
             Fees, spreads and taxes are not included.
         </p>
@@ -1140,21 +1110,20 @@
 const CACHE_TTL  = 24 * 60 * 60 * 1000;  // 24 hours in ms
 
 /**
- * Everything that differs between assets. The simulation itself is identical —
- * both price files share the schema {generated, source, count, prices[{ts, price}]}
- * with ts in UNIX seconds — so adding an asset is a config entry, not new logic.
+ * Everything asset-specific. Bitcoin is the only asset; the rest of the page reads
+ * these through asset(). The price file's schema is {generated, source, count,
+ * prices[{ts, price}]} with ts in UNIX seconds.
  */
 const ASSETS = {
     btc: {
         name:        'Bitcoin',
-        // Unit vocabulary. "per BTC"/"per share" needs the singular, "0.42 shares"
-        // the plural, and a column header wants it capitalised — one token can't
-        // serve all three without producing "shares Price" or "per shares".
+        // Unit vocabulary: singular ("per BTC"), plural ("0.42 BTC") and column-header
+        // forms are separate fields, even though for Bitcoin they read the same.
         unitSingular: 'BTC',
         unitPlural:   'BTC',
         unitHeader:   'BTC',
         priceLabel:   'BTC',             // the "___ Price" column
-        decimals:    8,                  // BTC is quoted to 8dp, index units to 6
+        decimals:    8,                  // BTC is quoted to 8dp
         title:       '<span class="btc-mark">&#8383;</span>itcoin DCA Calculator',
         docTitle:    '₿itcoin DCA Calculator',
         mark:        '<span class="btc-mark">&#8383;</span> ',   // chip prefix
@@ -1165,36 +1134,13 @@ const ASSETS = {
         lede:        'real Bitcoin closing prices',
         coverage:    'Bitstamp daily closes',
         risk:        'Bitcoin is a highly volatile asset',
-        employer:    false,
         seriesVar:   '--accent',
         credit:      'Price data: <a href="https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data" target="_blank" rel="noopener">Kaggle</a> '
                    + '(Bitstamp daily closes &bull; rebuilt daily via GitHub Actions)',
     },
-    sp500: {
-        name:        'S&P 500',
-        unitSingular: 'share',
-        unitPlural:   'shares',
-        unitHeader:   'Shares',
-        priceLabel:   'S&amp;P 500',
-        decimals:    6,
-        title:       'S&amp;P 500 DCA Calculator',
-        docTitle:    'S&P 500 DCA Calculator',
-        mark:        '',
-        dataUrl:     '/data/sp500-prices.json',
-        cachePrefix: 'sp500_dca_v1',
-        minDate:     '1928-01-03',
-        defaultFreq: '14',               // bi-weekly matches most US payroll cycles
-        lede:        'real S&amp;P 500 closing levels',
-        coverage:    '^GSPC daily closes',
-        risk:        'Equity markets can fall as well as rise',
-        employer:    true,               // 401k-style match
-        seriesVar:   '--series-blue',
-        credit:      'Price data: <a href="https://finance.yahoo.com/quote/%5EGSPC/" target="_blank" rel="noopener">Yahoo Finance (^GSPC)</a> '
-                   + '(daily closes &bull; rebuilt each weekday via GitHub Actions)',
-    },
 };
 
-/** Currently selected asset key; kept in sync with ?asset= in the URL. */
+/** Current asset key. Bitcoin is the only asset, and ?asset= is never written. */
 let assetKey = 'btc';
 const asset  = () => ASSETS[assetKey];
 const cacheKey = () => `${asset().cachePrefix}_${new Date().toISOString().split('T')[0]}`;
@@ -1207,7 +1153,6 @@ const workspace     = document.getElementById('workspace');
 const startInput    = document.getElementById('startDate');
 const startSlider   = document.getElementById('startSlider');
 const amountInput   = document.getElementById('amount');
-const employerInput = document.getElementById('employerAmount');
 const errorDiv      = document.getElementById('error');
 const heroValueEl   = document.getElementById('heroValue');
 const heroDeltaEl   = document.getElementById('heroDelta');
@@ -1232,7 +1177,7 @@ try { if (localStorage.getItem('dca_chart_scale') === 'logarithmic') chartScale 
 /** Plain-English cadence for the headline sentence. "Monthly" is every 30 days. */
 const FREQ_PHRASE = { 7: 'every week', 14: 'every two weeks', 30: 'every 30 days' };
 
-// In-memory cache, keyed by asset, so switching back and forth doesn't refetch
+// In-memory cache, keyed by asset, so a re-run never refetches
 const sessionData = {};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1273,7 +1218,7 @@ function fmtUSD(n) {
     return USD2.format(Number(n));   // same output as before; the formatter is built once
 }
 
-/** Format an asset-unit quantity — BTC to 8dp, index units to 6dp */
+/** Format an asset-unit quantity — BTC to 8dp */
 function fmtUnits(n) {
     return Number(n).toFixed(asset().decimals);
 }
@@ -1307,11 +1252,11 @@ function fmtDate(iso, fmt = DATE_LONG) {
     return fmt.format(new Date(`${iso}T00:00:00Z`));
 }
 
-/** Escape config text (e.g. "S&P 500") for innerHTML. */
+/** Escape config text (e.g. the asset name) for innerHTML. */
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-/** Whole UTC days since the epoch — the timeline slider's unit. S&P dates before
- *  1970 are negative, which Date.parse and toISOString both handle. */
+/** Whole UTC days since the epoch — the timeline slider's unit. Dates before
+ *  1970 would be negative, which Date.parse and toISOString both handle. */
 const DAY_MS   = 24 * 60 * 60 * 1000;
 const isoToDay = (iso) => Math.round(Date.parse(iso) / DAY_MS);
 const dayToIso = (d) => new Date(d * DAY_MS).toISOString().split('T')[0];
@@ -1335,7 +1280,7 @@ const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').mat
  * Money-weighted annual return (XIRR) over dated cash flows.
  *
  * A DCA plan is a stream of contributions at different times, so
- * (value / invested)^(1/years) — the shortcut the standalone 401k tool used —
+ * (value / invested)^(1/years) — the naive shortcut —
  * understates the return: it credits every dollar with the full elapsed period
  * even though later contributions compounded for only part of it. XIRR solves
  * for the rate that actually discounts these flows to zero.
@@ -1461,10 +1406,10 @@ async function fetchWithRetry(url, retries = 3, baseDelay = 1500, timeout = 1200
 /**
  * Returns: { prices: [{ts, price}], latestPrice, fetchedAt, generatedAt, stale? }
  *
- * Strategy (per asset — each has its own cache key and file):
+ * Strategy:
  *  1. In-memory session cache        → instant
  *  2. localStorage (< 24 h)          → fast (CDN-busted on each daily deploy)
- *  3. the asset's /data/*.json       → static file, served from Netlify CDN,
+ *  3. /data/btc-prices.json          → static file, served from Netlify CDN,
  *                                       rebuilt by a scheduled GitHub Action
  *  4. Stale localStorage              → fallback with warning
  *
@@ -1473,7 +1418,7 @@ async function fetchWithRetry(url, retries = 3, baseDelay = 1500, timeout = 1200
 async function loadPriceData() {
     const a   = asset();
     const key = cacheKey();
-    const k   = assetKey;   // captured: the visitor can switch assets mid-fetch
+    const k   = assetKey;   // this asset's in-memory cache slot
 
     // 1. In-memory
     if (sessionData[k]) return sessionData[k];
@@ -1514,11 +1459,11 @@ async function loadPriceData() {
         // Persist — gracefully handle storage quota errors.
         // Keys are date-scoped, so drop this asset's older entries first; without
         // that they accrete a full price file per visit-day until the quota is hit.
-        // Only this asset's prefix is swept, so the other asset keeps its cache.
+        // The retired S&P 500 view's cache (sp500_dca_*, ~0.8 MB) goes too.
         try {
             for (let i = localStorage.length - 1; i >= 0; i--) {
                 const k = localStorage.key(i);
-                if (k?.startsWith(`${a.cachePrefix}_`) && k !== key) localStorage.removeItem(k);
+                if ((k?.startsWith(`${a.cachePrefix}_`) && k !== key) || k?.startsWith('sp500_dca_')) localStorage.removeItem(k);
             }
             localStorage.setItem(key, JSON.stringify(result));
         } catch (storageErr) {
@@ -1540,14 +1485,11 @@ async function loadPriceData() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Asset switching
+// Asset setup
 // ─────────────────────────────────────────────────────────────────────────────
-/** Rewrite every asset-dependent label, then reload that asset's price data.
- *  `plan` carries start/freq/amount/match overrides from a shared link. */
-async function applyAsset(key, { pushUrl = true, plan = null } = {}) {
-    // own keys only: ?asset=__proto__ or =constructor would pass a plain lookup
-    if (!Object.prototype.hasOwnProperty.call(ASSETS, key)) key = 'btc';
-    assetKey = key;
+/** Write the asset's labels onto the page, then load its price data.
+ *  `plan` carries start/freq/amount overrides from a shared link. */
+async function applyAsset({ plan = null } = {}) {
     const a  = asset();
 
     document.title = a.docTitle;
@@ -1555,24 +1497,10 @@ async function applyAsset(key, { pushUrl = true, plan = null } = {}) {
     document.getElementById('ledeAsset').innerHTML    = a.lede;
     document.getElementById('assetRisk').innerHTML    = a.risk;
     document.getElementById('sourceCredit').innerHTML = a.credit;
-    document.getElementById('noteMover').textContent  = a.name === 'Bitcoin' ? 'price' : 'index';
     document.querySelectorAll('.asset-unit').forEach(el => { el.textContent = a.unitSingular; });
     document.querySelectorAll('.asset-unit-h').forEach(el => { el.textContent = a.unitHeader; });
     document.querySelectorAll('.asset-price-label').forEach(el => { el.innerHTML = a.priceLabel; });
     document.querySelectorAll('.asset-noun').forEach(el => { el.textContent = a.name; });
-
-    // Reflect the choice on the switch
-    document.querySelectorAll('.asset-btn').forEach(b => {
-        const on = b.dataset.asset === key;
-        b.classList.toggle('is-active', on);
-        b.setAttribute('aria-pressed', String(on));
-    });
-
-    // Employer match is a 401k concept — hide it (and neutralise it) elsewhere
-    document.getElementById('employerGroup').hidden = !a.employer;
-    if (!a.employer) employerInput.value = '0';
-    document.getElementById('amountLabel').textContent =
-        a.employer ? 'Your contribution (USD)' : 'Amount per purchase (USD)';
 
     // Date floor and default cadence are asset-specific; a shared link overrides them
     if (plan?.start) startInput.value = plan.start;
@@ -1580,10 +1508,9 @@ async function applyAsset(key, { pushUrl = true, plan = null } = {}) {
     if (startInput.value && startInput.value < a.minDate) startInput.value = a.minDate;
     setFrequency(plan?.freq || a.defaultFreq);
     if (plan?.amount) amountInput.value = plan.amount;
-    if (plan?.employer && a.employer) employerInput.value = plan.employer;
 
-    // Keep the previous render on screen, dimmed, until this asset's data is in —
-    // but drop what belongs to the old asset: its rows, its result, a failed load's state
+    // Keep the previous render on screen, dimmed, until the data is in, but drop
+    // the old rows, the old result and any failed load's state
     errorDiv.textContent = '';
     workspace.classList.remove('is-empty');
     workspace.classList.add('is-stale');
@@ -1595,20 +1522,14 @@ async function applyAsset(key, { pushUrl = true, plan = null } = {}) {
     lastPurchases = [];
     resetSortState();
 
-    if (pushUrl) syncUrl({ now: true });
     await initPage();
 }
-
-document.querySelector('.asset-switch').addEventListener('click', (e) => {
-    const btn = e.target.closest('.asset-btn');
-    if (btn && btn.dataset.asset !== assetKey) applyAsset(btn.dataset.asset);
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The plan: form state, the timeline slider, presets, and the shareable URL
 // ─────────────────────────────────────────────────────────────────────────────
 /** True once the visitor has changed the plan (or arrived on a shared one). Until
- *  then only ?asset= is written, so a plain visit keeps a clean address. */
+ *  then nothing is written, so a plain visit keeps a clean address. */
 let planTouched = false;
 
 /** The plan exactly as the form states it — unvalidated; see validatePlan(). */
@@ -1618,8 +1539,6 @@ function readPlan() {
         start:    startInput.value,
         freq:     parseInt(checked ? checked.value : asset().defaultFreq, 10),
         own:      parseFloat(amountInput.value),
-        // Employer match only applies to assets that opt in
-        employer: asset().employer ? (parseFloat(employerInput.value) || 0) : 0,
     };
 }
 
@@ -1646,19 +1565,17 @@ function syncTimeline() {
     });
 }
 
-/** The shareable link for what is on screen: only ?asset= until the plan is touched. */
+/** The shareable link for what is on screen: no plan params until the plan is touched. */
 function planUrl() {
     const url = new URL(location.href);
     const qs  = url.searchParams;
-    if (assetKey === 'btc') qs.delete('asset');
-    else                    qs.set('asset', assetKey);
+    qs.delete('asset');     // legacy params from old links are dropped, never written back
+    qs.delete('match');
     if (planTouched) {
         const plan = readPlan();
         qs.set('start', plan.start);
         qs.set('freq', String(plan.freq));
         qs.set('amt', amountInput.value);
-        if (plan.employer > 0) qs.set('match', employerInput.value);
-        else                   qs.delete('match');
     }
     return url;
 }
@@ -1697,7 +1614,6 @@ document.querySelector('.presets').addEventListener('click', (e) => {
 });
 form.addEventListener('change', (e) => { if (e.target.name === 'frequency') planChanged('now'); });
 amountInput.addEventListener('input', () => planChanged('debounce'));
-employerInput.addEventListener('input', () => planChanged('debounce'));
 
 async function copyLink() {
     planTouched = true;
@@ -1723,7 +1639,6 @@ document.getElementById('shareBtn').addEventListener('click', copyLink);
 async function initPage() {
     const today = todayStr();
     const a     = asset();
-    const key   = assetKey;
     dataReady   = false;
 
     // Default start = 1 year ago; max = today (no future dates)
@@ -1741,7 +1656,6 @@ async function initPage() {
     setStatus('loading', `Loading ${a.name} price data&hellip;`);
     try {
         const data     = await loadPriceData();
-        if (key !== assetKey) return;     // switched again while this was loading
         const lastTs      = data.prices?.length
             ? data.prices[data.prices.length - 1].ts
             : null;
@@ -1762,7 +1676,6 @@ async function initPage() {
         dataReady = true;
         await run();
     } catch (err) {
-        if (key !== assetKey) return;
         console.error('[dca] price data failed to load:', err);
         const msg = userMessageFor(err, `${a.name} price data could not be loaded.`);
         setStatus('error', msg + ' Refresh the page to try again.');
@@ -1792,17 +1705,12 @@ function validatePlan(plan, a) {
     if (startDate >= new Date())    throw userError('Your start date must be before today.');
     // `!(x >= 1)`, not `x < 1`: an emptied field parses to NaN, and NaN < 1 is false
     if (!(plan.own >= 1))           throw userError('Enter an amount of $1 or more per purchase.');
-    if (plan.employer < 0)          throw userError('Employer match cannot be negative.');
 }
 
 function simulate(prices, plan, a) {
     const startDate      = new Date(plan.start);
     const frequencyDays  = plan.freq;
-    const ownAmount      = plan.own;
-    // readPlan() already zeroes the match for assets without one; guard here
-    // too so a stale value can't leak in.
-    const employerAmount = a.employer ? plan.employer : 0;
-    const investAmount   = ownAmount + employerAmount;
+    const investAmount   = plan.own;
     const endDate        = new Date(); // always "today" — no hardcoded cutoff
 
     // ── Generate purchase schedule ──────────────────────────────────────
@@ -1817,8 +1725,6 @@ function simulate(prices, plan, a) {
     //    For each date, find the latest closing price at or before that date.
     //    prices[] is sorted ascending by ts.
     let totalInvested = 0;
-    let totalOwn      = 0;
-    let totalEmployer = 0;
     let totalUnits    = 0;
     const purchases   = [];
     const flows       = [];   // dated cash flows, for XIRR
@@ -1838,8 +1744,6 @@ function simulate(prices, plan, a) {
         const price       = prices[idx].price;
         const unitsBought = investAmount / price;
         totalInvested    += investAmount;
-        totalOwn         += ownAmount;
-        totalEmployer    += employerAmount;
         totalUnits       += unitsBought;
         flows.push({ when: new Date(date), amount: -investAmount });
 
@@ -1907,7 +1811,7 @@ function simulate(prices, plan, a) {
     }
 
     return {
-        purchases, totalInvested, totalOwn, totalEmployer, totalUnits, employerAmount,
+        purchases, totalInvested, totalUnits,
         finalPrice, finalValue, profit, roi, avgCost, duration, annual, spanYears,
         meanPaid, finalDate, labels, investedData, valueData,
     };
@@ -2027,9 +1931,8 @@ function renderHero(r, plan, a, quick) {
     heroDeltaEl.textContent = `${up ? '▲' : '▼'} ${fmtSigned(r.profit)} · ${fmtPct(Number(r.roi))}`;
 
     const n     = r.purchases.length;
-    const match = r.employerAmount > 0 ? `, plus a ${fmtAmount(r.employerAmount)} employer match,` : '';
     heroStoryEl.innerHTML =
-        `Buying <strong>${fmtAmount(plan.own)}</strong> of ${esc(a.name)}${match} ${FREQ_PHRASE[plan.freq]} `
+        `Buying <strong>${fmtAmount(plan.own)}</strong> of ${esc(a.name)} ${FREQ_PHRASE[plan.freq]} `
         + `since <strong>${fmtDate(plan.start)}</strong> &mdash; ${r.duration}, `
         + `${n.toLocaleString('en-US')} purchase${n === 1 ? '' : 's'}, `
         + `<strong>${fmtMoney(r.totalInvested)}</strong> in total.`;
@@ -2054,9 +1957,7 @@ function renderTiles(r, a) {
     // Only meaningful once a reasonable span has elapsed — over a few weeks
     // XIRR annualises noise into absurd figures.
     const annualOk = r.annual !== null && isFinite(r.annual) && r.spanYears >= 1;
-    const invested = r.totalEmployer > 0
-        ? `You ${fmtMoney(r.totalOwn)} &middot; employer ${fmtMoney(r.totalEmployer)}`
-        : `${n.toLocaleString('en-US')} purchase${n === 1 ? '' : 's'}`;
+    const invested = `${n.toLocaleString('en-US')} purchase${n === 1 ? '' : 's'}`;
     tilesEl.innerHTML = [
         tile('Total invested', fmtMoney(r.totalInvested), invested),
         tile('Total profit / loss', fmtSigned(r.profit), 'Unrealised, before fees', tone(r.profit)),
@@ -2099,7 +2000,7 @@ let chartTheme = null;      // tokens are static (dark only), so they are read o
 let chartData  = null;      // what the chart is plotting right now, for the readout
 const tickCache = new Map();
 
-/** Built once per asset + scale, then updated in place, so the slider can
+/** Built once per scale setting, then updated in place, so the slider can
  *  re-render every frame without rebuilding Chart.js. */
 function drawChart(r, a) {
     const t      = chartTheme ??= deckChartTheme();
@@ -2281,7 +2182,7 @@ let historyDirty = false;
 let historyTimer = 0;
 
 /** Render (or re-render) the history table from a purchases array. Built as one
- *  string and written once — an S&P weekly run from 1928 is ~5,100 rows. */
+ *  string and written once — a weekly run from 2013 is ~700 rows. */
 function renderHistoryTable(data) {
     let html = '';
     for (const p of data) {
@@ -2407,19 +2308,34 @@ function downloadCsv() {
 document.getElementById('csvBtn').addEventListener('click', downloadCsv);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Boot — honour ?asset= and a shared plan (start, freq, amt, match), so every view is linkable
+// Boot — honour a shared plan (start, freq, amt), so every view is linkable
 // ─────────────────────────────────────────────────────────────────────────────
 (() => {
     const qs   = new URLSearchParams(location.search);
+    // Legacy ?asset=sp500 links: that calculator is its own site again. Point
+    // visitors there (plan carried across) rather than redirecting: its old
+    // "Moved" page forwards back here, so a redirect could bounce between the two.
+    if (qs.get('asset') === 'sp500') {
+        const dest = new URL('https://project401k.netlify.app/');
+        for (const k of ['start', 'freq', 'amt', 'match']) {
+            if (qs.has(k)) dest.searchParams.set(k, qs.get(k));
+        }
+        const note = document.getElementById('movedNote');
+        note.querySelector('a').href = dest.href;
+        note.hidden = false;
+        try { history.replaceState(null, '', location.pathname); } catch (_) { /* keep the URL */ }
+        syncScaleButtons();
+        applyAsset();           // the S&P plan doesn't apply here: start from the defaults
+        return;
+    }
     const plan = {};
     if (/^\d{4}-\d{2}-\d{2}$/.test(qs.get('start') ?? '')) plan.start    = qs.get('start');
     if (['7', '14', '30'].includes(qs.get('freq')))           plan.freq     = qs.get('freq');
     const num  = (k) => { const v = parseFloat(qs.get(k)); return Number.isFinite(v) ? v : NaN; };
     if (num('amt') >= 1)                                     plan.amount   = String(num('amt'));
-    if (num('match') >= 0)                                   plan.employer = String(num('match'));
     planTouched = Object.keys(plan).length > 0;   // a shared plan stays in the URL
     syncScaleButtons();
-    applyAsset(qs.get('asset') || 'btc', { pushUrl: false, plan });
+    applyAsset({ plan });   // any other ?asset= value is ignored
 })();
 </script>
 </body>
