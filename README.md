@@ -6,7 +6,7 @@ Dollar Cost Averaging (DCA) is an investment strategy where an investor divides 
 
 ## Live Tool
 
-**[DCA Calculator](https://dca-btc-with-me.netlify.app/)** — a browser-based simulator. Pick an asset, set a start date, contribution frequency and dollar amount, and see your total return, portfolio growth chart, and full purchase history.
+**[DCA Calculator](https://dca-btc-with-me.netlify.app/)** — a browser-based simulator. Pick an asset, set a start date, contribution frequency and dollar amount, and your total return, portfolio growth chart, and full purchase history update live as you go.
 
 - Bitcoin: <https://dca-btc-with-me.netlify.app/>
 - S&P 500: <https://dca-btc-with-me.netlify.app/?asset=sp500>
@@ -105,10 +105,14 @@ Each is a standalone, reusable artifact (BTC ~175 KB, S&P ~783 KB):
 The calculator supports:
 - **Asset**: Bitcoin or S&P 500, switchable in the header and linkable via `?asset=sp500`
 - **Start date**: Bitcoin from 28 April 2013, S&P 500 from 3 January 1928 (both default to 1 year ago).
-  The Bitcoin dataset reaches back to 2012 — that earlier floor is a deliberate legacy cutoff
+  The Bitcoin dataset reaches back to 2012 — that earlier floor is a deliberate legacy cutoff.
+  Quick presets (1Y · 3Y · 5Y · 10Y · Max — the horizons the original notebook studied) sit above the
+  date field, and a timeline slider scrubs the start date through history
 - **Frequency**: Weekly, bi-weekly, or monthly (S&P 500 defaults to bi-weekly, matching most US payroll cycles)
 - **Amount**: Any USD amount per purchase (defaults to $100)
 - **Employer match** (S&P 500 only): an additional per-purchase amount, reported separately in the summary
+- **Shareable plans**: once you change anything, the address bar links to exactly the plan on screen
+  (`?asset=sp500&start=2000-01-03&freq=14&amt=100&match=50`), and *Copy link* puts it on the clipboard
 
 For each purchase date, the simulator binary-searches for the most recent daily close **at or before** that date — never a later one, so the model can't look ahead — and calculates:
 - Total invested (split into your contributions vs employer match, where applicable)
@@ -119,7 +123,11 @@ For each purchase date, the simulator binary-searches for the most recent daily 
 - Return on investment (%) — cumulative over the whole period
 - Annualised return (XIRR) — money-weighted, shown once a run spans at least a year
 
-Results are displayed as a summary table, an interactive chart (with ROI % on hover), and a full purchase history table with sortable columns.
+Results update live — there is no Run button. The page leads with the portfolio value and a plain-English
+summary of the plan, then six KPI tiles, a chart of portfolio value against total invested (linear or log
+scale, gain/loss shading between the lines, and a readout of value, invested and ROI at whatever date the
+pointer is on), an **averaging effect** card, and a collapsible purchase history with sortable columns and
+CSV export.
 
 ### What the model assumes
 
@@ -136,19 +144,22 @@ These are stated on the page too, under *How this works*, but they matter to any
 ## Key Features
 
 - **Two assets, one engine** — switch in the header, or deep-link with `?asset=sp500`
+- **Live results** — every change re-runs the simulation; drag the start-date timeline and watch the numbers move
+- **Shareable links** — the URL encodes the whole plan, not just the asset
 - **Always-current data** via automated GitHub Actions pipelines for both assets
 - **localStorage caching**, keyed per day, for instant repeat visits
-- **Sortable history table** — every column sorts, by click or keyboard
-- **ROI tracking on chart hover** — shows return percentage at any point in time
+- **Sortable history table** — every column sorts, by click or keyboard; the order survives live re-runs; exports to CSV
+- **Chart readout** — value, invested and ROI at any date, on a linear or log scale
+- **Averaging effect** — average cost per unit against the average price on your purchase dates
 - **Staleness warning** — the header chip turns amber if the data is over three days old
 - **Responsive, dark-only design** — works on desktop and mobile
-- **No external dependencies at runtime** beyond Chart.js
+- **No external dependencies at runtime** beyond Chart.js (pinned to 4.5.1, with an SRI hash)
 
 ## Conclusion
 
 This project illustrates how Dollar Cost Averaging can be applied to Bitcoin investments over any time horizon, by replaying purchases at regular intervals against real historical prices.
 
-The clearest thing it demonstrates is the mechanic DCA is named for: because a fixed dollar amount buys more BTC when the price is low, **average cost per BTC lands below the average of the prices actually paid**. Run weekly buys from 2013 and the average cost comes out near \$960 against a mean paid price above \$26,000 — the two numbers are visible side by side in the summary and the history table.
+The clearest thing it demonstrates is the mechanic DCA is named for: because a fixed dollar amount buys more BTC when the price is low, **average cost per BTC lands below the average of the prices actually paid**. Run weekly buys from 2013 and the average cost comes out near \$970 against a mean paid price above \$26,000 — the two numbers sit side by side in the page's *averaging effect* card.
 
 What it does **not** show is whether DCA beats the alternatives. There is no lump-sum or buy-the-dip baseline to compare against, the sample is one asset over one stretch of history, and fees are excluded. Treat the output as "here is what this schedule would have produced," not as evidence that this schedule is best.
 
