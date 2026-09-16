@@ -41,9 +41,16 @@ The scheduled Action writes the JSON, commits it, and Netlify auto-deploys. This
 │   └── btc-prices.json                     # auto-generated, daily
 ├── scripts/
 │   └── fetch_btc_prices.py                 # Kaggle download → daily closes
+├── tests/
+│   ├── engine.test.mjs                     # simulate(), xirr(), the formatters
+│   ├── timezone.test.mjs                   # same plan, three timezones
+│   ├── harness.mjs                         # pulls the inline <script> into a vm
+│   └── fixtures/
+│       └── prices.json                     # committed synthetic price series
 └── .github/
     └── workflows/
-        └── update-btc-data.yml             # daily cron
+        ├── update-btc-data.yml             # daily cron
+        └── test.yml                        # node --test on push and PR
 ```
 
 `netlify.toml` is load-bearing twice: `publish = "."` is what makes the page's
@@ -83,6 +90,37 @@ pip install kaggle && KAGGLE_USERNAME=you KAGGLE_KEY=xxxx python3 scripts/fetch_
   "prices":    [ { "ts": 1325376000, "price": 5.0 } ]   // ts = UNIX SECONDS (UTC), ascending
 }
 ```
+
+## Tests
+
+No dependencies and no install step — the engine is exercised straight out of
+`index.html`:
+
+```bash
+node --test tests/*.test.mjs
+```
+
+`tests/harness.mjs` extracts the inline `<script>`, evaluates it in a `node:vm`
+context against a minimal DOM stub, and hands back the pure functions. The boot
+code at the end of the script is cut off, so nothing fetches or renders.
+
+- **`engine.test.mjs`** — golden results for several plans (purchase counts,
+  totals, units, final value, ROI, average cost and the last history row), XIRR
+  against closed-form cases including one it cannot solve, the *averaging effect*
+  invariant that average cost never exceeds the mean price paid, the guard that a
+  purchase never fills at a close later than its own date, the start-date rules,
+  and the formatters.
+- **`timezone.test.mjs`** — runs the same plans in child processes under `TZ=UTC`,
+  `TZ=America/New_York` and `TZ=Australia/Sydney` and requires byte-identical
+  output. The schedule steps with `setUTCDate()`; stepping in local time would
+  drift by an hour across a daylight-saving change and can roll a purchase back
+  onto the previous UTC day, filling it at the previous close.
+
+Every expectation runs against `tests/fixtures/prices.json` — a small, committed,
+deterministic series in the same schema as the real file — and against an end date
+passed into `simulate()`. Nothing depends on `data/btc-prices.json` or on today's
+date, so the daily data job can never turn the suite red.
+
 
 ## DCA Simulation
 
