@@ -110,6 +110,12 @@ code at the end of the script is cut off, so nothing fetches or renders.
   invariant that average cost never exceeds the mean price paid, the guard that a
   purchase never fills at a close later than its own date, the start-date rules,
   and the formatters.
+- **`heatmap.test.mjs`** — the start-date heatmap's grid builder: that a cell is
+  `simulate()`'s own `annual` for the same plan (and reports the same "no rate
+  solves" where `simulate()` does), that a cell is unchanged by the contribution
+  amount, the row and column geometry (a holding period the data cannot fill is
+  dropped whole; no cell's window runs past the last close), and the per-row
+  worst / median / best / share-positive figures against hand-worked values.
 - **`timezone.test.mjs`** — runs the same plans in child processes under `TZ=UTC`,
   `TZ=America/New_York` and `TZ=Australia/Sydney` and requires byte-identical
   output. The schedule steps with `setUTCDate()`; stepping in local time would
@@ -146,8 +152,39 @@ For each purchase date, the simulator binary-searches for the most recent daily 
 Results update live — there is no Run button. The page leads with the portfolio value and a plain-English
 summary of the plan, then six KPI tiles, a chart of portfolio value against total invested (linear or log
 scale, gain/loss shading between the lines, and a readout of value, invested and ROI at whatever date the
-pointer is on), an **averaging effect** card, and a collapsible purchase history with sortable columns and
-CSV export.
+pointer is on), an **averaging effect** card, a collapsible **start-date heatmap**, and a collapsible
+purchase history with sortable columns and CSV export.
+
+### The start-date heatmap
+
+*Did your start date matter?* — a collapsed panel under the averaging card, answering
+the question the rest of the tool keeps implying: how much of an outcome is the month
+you happened to begin, and how much of that fades as the holding period grows.
+
+Rows are holding periods of 1, 2, 3, 5 and 10 years; a period the price history cannot
+fill even once is dropped rather than shown empty. Columns are every calendar month
+from the 2013 floor up to the last month whose window still finishes on or before the
+newest close — so the grid's right edge is ragged, and the longer the hold, the sooner
+it stops. Each cell is a whole plan of its own, run through the same `simulate()` the
+headline figures use, and coloured by its money-weighted annualised return on a
+diverging scale clamped symmetrically at ±100%/yr. Your own start month is outlined in
+the accent colour.
+
+**A cell does not depend on the amount you buy.** Scaling every contribution scales the
+cash flows by the same factor and leaves the rate that discounts them to zero exactly
+where it was, so the grid is a function of the price history and the frequency alone.
+Changing the amount or the start date repaints it (to move the marker) but never
+recomputes it; changing the frequency does recompute, and abandons any pass still in
+flight. Each frequency's finished grid is cached, so going back to one is instant.
+
+Building it is around 560 simulations on the Bitcoin series (and one more column every
+month), so it runs in frame-sized chunks
+rather than one blocking pass, seeding each XIRR solve with the previous cell's answer
+to cut Newton's iterations by about a quarter. Nothing is computed until the panel is
+first opened. Below the canvas, each row's worst, median and best outcome and the share
+of start months that ended positive are written out as text — the canvas itself is a
+labelled `role="img"` that takes focus, so the arrow keys walk it cell by cell and the
+colour key is `aria-hidden` — no figure is ever reachable by hover alone.
 
 ### What the model assumes
 
@@ -170,6 +207,7 @@ These are stated on the page too, under *How this works*, but they matter to any
 - **Sortable history table** — every column sorts, by click or keyboard; the order survives live re-runs; exports to CSV
 - **Chart readout** — value, invested and ROI at any date, on a linear or log scale
 - **Averaging effect** — average cost per BTC against the average price on your purchase dates
+- **Start-date heatmap** — every start month since 2013 against holding periods of 1 to 10 years, coloured by annualised return, with each row's spread written out as text
 - **Staleness warning** — the header chip turns amber if the data is over three days old
 - **Responsive, dark-only design** — works on desktop and mobile
 - **No external dependencies at runtime** beyond Chart.js (pinned to 4.5.1, with an SRI hash)
